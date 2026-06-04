@@ -839,6 +839,34 @@ function calculateStorage() {
         .catch(() => {});
 }
 
+// 检查文件大小是否超过最大容量
+function checkStorageSpace(files) {
+    return apiCall('/api/storage')
+        .then(data => {
+            if (!data.success) return false;
+            const usedSize = data.data.usedSize;
+            const maxSize = data.data.maxSize;
+            
+            // 计算文件总大小
+            let totalSize = 0;
+            for (const file of files) {
+                totalSize += file.size;
+            }
+            
+            // 检查是否超过最大容量
+            if (usedSize + totalSize > maxSize) {
+                const remainingSpace = maxSize - usedSize;
+                showToast(`存储空间不足！剩余空间: ${formatFileSize(remainingSpace)}，需要空间: ${formatFileSize(totalSize)}`, 'error');
+                return false;
+            }
+            return true;
+        })
+        .catch(() => {
+            showToast('无法获取存储空间信息', 'error');
+            return false;
+        });
+}
+
 // ===== 上传文件 =====
 function uploadFiles() {
     // 权限验证：只有登录用户可以上传文件
@@ -853,64 +881,117 @@ function uploadFiles() {
         return;
     }
 
-    const formData = new FormData();
-    for (let i = 0; i < fileInput.files.length; i++) {
-        formData.append("files", fileInput.files[i]);
-    }
-    formData.append("path", currentPath);
-    formData.append("conflict", localStorage.getItem('uploadConflict') || 'rename');
-
-    const progressDiv = document.getElementById("upload-progress");
-    const progressBar = progressDiv.querySelector(".progress-bar-fill");
-    const progressText = progressDiv.querySelector(".progress-text");
-    progressDiv.style.display = "block";
-
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", API_BASE + "/api/upload");
-
-    // 添加认证头
-    if (authToken) {
-        xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
-    }
-
-    xhr.upload.onprogress = function(e) {
-        if (e.lengthComputable) {
-            const percent = Math.round(e.loaded / e.total * 100);
-            progressBar.style.width = percent + "%";
-            progressText.textContent = percent + "%";
+    // 检查存储空间
+    const files = Array.from(fileInput.files);
+    checkStorageSpace(files).then(hasSpace => {
+        if (!hasSpace) {
+            return;
         }
-    };
 
-    xhr.onload = function() {
-        progressDiv.style.display = "none";
-        progressBar.style.width = "0%";
-        progressBar.classList.remove("progress-bar-animated");
-        progressText.textContent = "0%";
+        // 分批上传，每批最多100个文件
+        const batchSize = 100;
+        const totalBatches = Math.ceil(files.length / batchSize);
+        let currentBatch = 0;
+        let uploadedCount = 0;
+        let failedCount = 0;
+        // 生成唯一会话ID，确保不同上传操作不会互相干扰
+        const uploadSessionId = Date.now().toString(36) + Math.random().toString(36).substr(2);
 
-        if (xhr.status === 200) {
-            const data = JSON.parse(xhr.responseText);
-            if (data.success) {
+        const progressDiv = document.getElementById("upload-progress");
+        const progressBar = progressDiv.querySelector(".progress-bar-fill");
+        const progressText = progressDiv.querySelector(".progress-text");
+        progressDiv.style.display = "block";
+        progressBar.classList.add("progress-bar-animated");
+
+        function uploadBatch() {
+            if (currentBatch >= totalBatches) {
+                // 所有批次上传完成
+                progressDiv.style.display = "none";
+                progressBar.style.width = "0%";
+                progressBar.classList.remove("progress-bar-animated");
+                progressText.textContent = "0%";
+                
                 loadFiles(currentPath);
                 loadTree();
                 calculateStorage();
-                showToast("文件上传成功", "success");
+                
+                if (failedCount > 0) {
+                    showToast(`上传完成：成功 ${uploadedCount} 个，失败 ${failedCount} 个`, "warning");
+                } else {
+                    showToast("文件上传成功", "success");
+                }
                 closeModal("upload-modal");
-            } else {
-                showToast(data.message, "error");
+                return;
             }
-        } else if (xhr.status === 401) {
-            handleLogout();
-        } else {
-            showToast("上传失败", "error");
+
+            const start = currentBatch * batchSize;
+            const end = Math.min(start + batchSize, files.length);
+            const batchFiles = files.slice(start, end);
+
+            const formData = new FormData();
+            for (let i = 0; i < batchFiles.length; i++) {
+                formData.append("files", batchFiles[i]);
+            }
+            formData.append("path", currentPath);
+            formData.append("conflict", localStorage.getItem('uploadConflict') || 'rename');
+            formData.append("uploadSessionId", uploadSessionId);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", API_BASE + "/api/upload");
+
+            // 添加认证头
+            if (authToken) {
+                xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
+            }
+
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    const batchPercent = Math.round(e.loaded / e.total * 100);
+                    const totalPercent = Math.round(((currentBatch * batchSize) + (batchPercent / 100 * batchFiles.length)) / files.length * 100);
+                    progressBar.style.width = totalPercent + "%";
+                    progressText.textContent = `正在上传第 ${currentBatch + 1}/${totalBatches} 批 (${totalPercent}%)`;
+                }
+            };
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data.success) {
+                        uploadedCount += data.uploadedCount || batchFiles.length;
+                        if (data.failedCount) {
+                            failedCount += data.failedCount;
+                        }
+                    } else {
+                        failedCount += batchFiles.length;
+                        showToast(data.message || "上传失败", "error");
+                    }
+                } else if (xhr.status === 401) {
+                    handleLogout();
+                    return;
+                } else {
+                    failedCount += batchFiles.length;
+                    showToast("上传失败", "error");
+                }
+
+                currentBatch++;
+                // 继续上传下一批
+                setTimeout(uploadBatch, 100); // 添加小延迟，避免服务器压力过大
+            };
+
+            xhr.onerror = function() {
+                failedCount += batchFiles.length;
+                showToast("上传失败，正在重试...", "error");
+                // 继续上传下一批
+                currentBatch++;
+                setTimeout(uploadBatch, 1000); // 失败后等待1秒再重试
+            };
+
+            xhr.send(formData);
         }
-    };
 
-    xhr.onerror = function() {
-        progressDiv.style.display = "none";
-        showToast("上传失败", "error");
-    };
-
-    xhr.send(formData);
+        // 开始上传第一批
+        uploadBatch();
+    });
 }
 
 // ===== 上传文件夹 =====
@@ -927,71 +1008,123 @@ function uploadFolder() {
         return;
     }
 
-    const formData = new FormData();
-    const pathMap = {};
-    for (let i = 0; i < folderInput.files.length; i++) {
-        const file = folderInput.files[i];
-        const relativePath = file.webkitRelativePath || file.name;
-        // 使用索引作为文件名，确保 Go multipart 不会丢失路径信息
-        const indexedName = String(i);
-        formData.append("files", file, indexedName);
-        pathMap[indexedName] = relativePath;
-    }
-    formData.append("path", currentPath);
-    formData.append("pathMap", JSON.stringify(pathMap));
-    formData.append("conflict", localStorage.getItem('uploadConflict') || 'rename');
-
-    const progressDiv = document.getElementById("folder-upload-progress");
-    const progressBar = progressDiv.querySelector(".progress-bar-fill");
-    const progressText = progressDiv.querySelector(".progress-text");
-    progressDiv.style.display = "block";
-
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", API_BASE + "/api/upload");
-
-    // 添加认证头
-    if (authToken) {
-        xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
-    }
-
-    xhr.upload.onprogress = function(e) {
-        if (e.lengthComputable) {
-            const percent = Math.round(e.loaded / e.total * 100);
-            progressBar.style.width = percent + "%";
-            progressText.textContent = percent + "%";
+    // 检查存储空间
+    const files = Array.from(folderInput.files);
+    checkStorageSpace(files).then(hasSpace => {
+        if (!hasSpace) {
+            return;
         }
-    };
 
-    xhr.onload = function() {
-        progressDiv.style.display = "none";
-        progressBar.style.width = "0%";
-        progressBar.classList.remove("progress-bar-animated");
-        progressText.textContent = "0%";
+        // 分批上传，每批最多100个文件
+        const batchSize = 100;
+        const totalBatches = Math.ceil(files.length / batchSize);
+        let currentBatch = 0;
+        let uploadedCount = 0;
+        let failedCount = 0;
+        // 生成唯一会话ID，确保不同上传操作不会互相干扰
+        const uploadSessionId = Date.now().toString(36) + Math.random().toString(36).substr(2);
 
-        if (xhr.status === 200) {
-            const data = JSON.parse(xhr.responseText);
-            if (data.success) {
+        const progressDiv = document.getElementById("folder-upload-progress");
+        const progressBar = progressDiv.querySelector(".progress-bar-fill");
+        const progressText = progressDiv.querySelector(".progress-text");
+        progressDiv.style.display = "block";
+        progressBar.classList.add("progress-bar-animated");
+
+        function uploadBatch() {
+            if (currentBatch >= totalBatches) {
+                // 所有批次上传完成
+                progressDiv.style.display = "none";
+                progressBar.style.width = "0%";
+                progressBar.classList.remove("progress-bar-animated");
+                progressText.textContent = "0%";
+                
                 loadFiles(currentPath);
                 loadTree();
                 calculateStorage();
-                showToast("文件夹上传成功", "success");
+                
+                if (failedCount > 0) {
+                    showToast(`上传完成：成功 ${uploadedCount} 个，失败 ${failedCount} 个`, "warning");
+                } else {
+                    showToast("文件夹上传成功", "success");
+                }
                 closeModal("upload-folder-modal");
-            } else {
-                showToast(data.message, "error");
+                return;
             }
-        } else if (xhr.status === 401) {
-            handleLogout();
-        } else {
-            showToast("上传失败", "error");
+
+            const start = currentBatch * batchSize;
+            const end = Math.min(start + batchSize, files.length);
+            const batchFiles = files.slice(start, end);
+
+            const formData = new FormData();
+            const pathMap = {};
+            for (let i = 0; i < batchFiles.length; i++) {
+                const file = batchFiles[i];
+                const relativePath = file.webkitRelativePath || file.name;
+                const indexedName = String(start + i);
+                formData.append("files", file, indexedName);
+                pathMap[indexedName] = relativePath;
+            }
+            formData.append("path", currentPath);
+            formData.append("pathMap", JSON.stringify(pathMap));
+            formData.append("conflict", localStorage.getItem('uploadConflict') || 'rename');
+            formData.append("uploadSessionId", uploadSessionId);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", API_BASE + "/api/upload");
+
+            // 添加认证头
+            if (authToken) {
+                xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
+            }
+
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    const batchPercent = Math.round(e.loaded / e.total * 100);
+                    const totalPercent = Math.round(((currentBatch * batchSize) + (batchPercent / 100 * batchFiles.length)) / files.length * 100);
+                    progressBar.style.width = totalPercent + "%";
+                    progressText.textContent = `正在上传第 ${currentBatch + 1}/${totalBatches} 批 (${totalPercent}%)`;
+                }
+            };
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data.success) {
+                        uploadedCount += data.uploadedCount || batchFiles.length;
+                        if (data.failedCount) {
+                            failedCount += data.failedCount;
+                        }
+                    } else {
+                        failedCount += batchFiles.length;
+                        showToast(data.message || "上传失败", "error");
+                    }
+                } else if (xhr.status === 401) {
+                    handleLogout();
+                    return;
+                } else {
+                    failedCount += batchFiles.length;
+                    showToast("上传失败", "error");
+                }
+
+                currentBatch++;
+                // 继续上传下一批
+                setTimeout(uploadBatch, 100); // 添加小延迟，避免服务器压力过大
+            };
+
+            xhr.onerror = function() {
+                failedCount += batchFiles.length;
+                showToast("上传失败，正在重试...", "error");
+                // 继续上传下一批
+                currentBatch++;
+                setTimeout(uploadBatch, 1000); // 失败后等待1秒再重试
+            };
+
+            xhr.send(formData);
         }
-    };
 
-    xhr.onerror = function() {
-        progressDiv.style.display = "none";
-        showToast("上传失败", "error");
-    };
-
-    xhr.send(formData);
+        // 开始上传第一批
+        uploadBatch();
+    });
 }
 
 // ===== 拖拽上传区域 =====
@@ -1093,69 +1226,122 @@ function uploadDroppedFiles(files, targetPath) {
         return;
     }
 
-    const formData = new FormData();
-    const pathMap = {};
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const relativePath = file.relativePath || file.webkitRelativePath || file.name;
-        const indexedName = String(i);
-        formData.append("files", file, indexedName);
-        pathMap[indexedName] = relativePath;
-    }
-    formData.append("path", targetPath);
-    formData.append("pathMap", JSON.stringify(pathMap));
-
-    const progressDiv = document.getElementById("upload-progress");
-    const progressBar = progressDiv.querySelector(".progress-bar-fill");
-    const progressText = progressDiv.querySelector(".progress-text");
-    progressDiv.style.display = "block";
-
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", API_BASE + "/api/upload");
-
-    // 添加认证头
-    if (authToken) {
-        xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
-    }
-
-    xhr.upload.onprogress = function(e) {
-        if (e.lengthComputable) {
-            const percent = Math.round(e.loaded / e.total * 100);
-            progressBar.style.width = percent + "%";
-            progressText.textContent = percent + "%";
+    // 检查存储空间
+    checkStorageSpace(files).then(hasSpace => {
+        if (!hasSpace) {
+            return;
         }
-    };
 
-    xhr.onload = function() {
-        progressDiv.style.display = "none";
-        progressBar.style.width = "0%";
-        progressBar.classList.remove("progress-bar-animated");
-        progressText.textContent = "0%";
+        // 分批上传，每批最多100个文件
+        const batchSize = 100;
+        const totalBatches = Math.ceil(files.length / batchSize);
+        let currentBatch = 0;
+        let uploadedCount = 0;
+        let failedCount = 0;
+        // 生成唯一会话ID，确保不同上传操作不会互相干扰
+        const uploadSessionId = Date.now().toString(36) + Math.random().toString(36).substr(2);
 
-        if (xhr.status === 200) {
-            const data = JSON.parse(xhr.responseText);
-            if (data.success) {
+        const progressDiv = document.getElementById("upload-progress");
+        const progressBar = progressDiv.querySelector(".progress-bar-fill");
+        const progressText = progressDiv.querySelector(".progress-text");
+        progressDiv.style.display = "block";
+        progressBar.classList.add("progress-bar-animated");
+
+        function uploadBatch() {
+            if (currentBatch >= totalBatches) {
+                // 所有批次上传完成
+                progressDiv.style.display = "none";
+                progressBar.style.width = "0%";
+                progressBar.classList.remove("progress-bar-animated");
+                progressText.textContent = "0%";
+                
                 loadFiles(currentPath);
                 loadTree();
                 calculateStorage();
-                showToast("上传成功", "success");
+                
+                if (failedCount > 0) {
+                    showToast(`上传完成：成功 ${uploadedCount} 个，失败 ${failedCount} 个`, "warning");
+                } else {
+                    showToast("上传成功", "success");
+                }
                 closeModal("upload-modal");
-            } else {
-                showToast(data.message, "error");
+                return;
             }
-        } else if (xhr.status === 401) {
-            handleLogout();
-        } else {
-            showToast("上传失败", "error");
+
+            const start = currentBatch * batchSize;
+            const end = Math.min(start + batchSize, files.length);
+            const batchFiles = files.slice(start, end);
+
+            const formData = new FormData();
+            const pathMap = {};
+            for (let i = 0; i < batchFiles.length; i++) {
+                const file = batchFiles[i];
+                const relativePath = file.relativePath || file.webkitRelativePath || file.name;
+                const indexedName = String(start + i);
+                formData.append("files", file, indexedName);
+                pathMap[indexedName] = relativePath;
+            }
+            formData.append("path", targetPath);
+            formData.append("pathMap", JSON.stringify(pathMap));
+            formData.append("uploadSessionId", uploadSessionId);
+            formData.append("conflict", localStorage.getItem('uploadConflict') || 'rename');
+
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", API_BASE + "/api/upload");
+
+            // 添加认证头
+            if (authToken) {
+                xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
+            }
+
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    const batchPercent = Math.round(e.loaded / e.total * 100);
+                    const totalPercent = Math.round(((currentBatch * batchSize) + (batchPercent / 100 * batchFiles.length)) / files.length * 100);
+                    progressBar.style.width = totalPercent + "%";
+                    progressText.textContent = `正在上传第 ${currentBatch + 1}/${totalBatches} 批 (${totalPercent}%)`;
+                }
+            };
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data.success) {
+                        uploadedCount += data.uploadedCount || batchFiles.length;
+                        if (data.failedCount) {
+                            failedCount += data.failedCount;
+                        }
+                    } else {
+                        failedCount += batchFiles.length;
+                        showToast(data.message || "上传失败", "error");
+                    }
+                } else if (xhr.status === 401) {
+                    handleLogout();
+                    return;
+                } else {
+                    failedCount += batchFiles.length;
+                    showToast("上传失败", "error");
+                }
+
+                currentBatch++;
+                // 继续上传下一批
+                setTimeout(uploadBatch, 100); // 添加小延迟，避免服务器压力过大
+            };
+
+            xhr.onerror = function() {
+                failedCount += batchFiles.length;
+                showToast("上传失败，正在重试...", "error");
+                // 继续上传下一批
+                currentBatch++;
+                setTimeout(uploadBatch, 1000); // 失败后等待1秒再重试
+            };
+
+            xhr.send(formData);
         }
-    };
 
-    xhr.onerror = function() {
-        progressDiv.style.display = "none";
-        showToast("上传失败", "error");
-    };
-
-    xhr.send(formData);
+        // 开始上传第一批
+        uploadBatch();
+    });
 }
 
 function displayUploadFileList(files) {
@@ -1272,7 +1458,11 @@ function downloadSelectedFiles() {
 
     // 目录或批量下载：使用batch-download API打包为zip
     showToast("正在打包文件，请稍候...", "info");
-    const paths = selectedFiles.map(f => f.path);
+    
+    // 提前保存文件信息，防止异步操作中被修改
+    const filesToDownload = [...selectedFiles];
+    const paths = filesToDownload.map(f => f.path);
+    
     const downloadBtn = document.getElementById("download-btn");
     const originalHTML = downloadBtn.innerHTML;
     downloadBtn.disabled = true;
@@ -1292,7 +1482,7 @@ function downloadSelectedFiles() {
         const a = document.createElement("a");
         a.href = url;
         // 单个目录用目录名，多个用"第一个文件+..等.zip"
-        const zipName = selectedFiles.length === 1 ? selectedFiles[0].name + ".zip" : selectedFiles[0].name + "..等.zip";
+        const zipName = filesToDownload.length === 1 ? filesToDownload[0].name + ".zip" : filesToDownload[0].name + "..等.zip";
         a.download = zipName;
         document.body.appendChild(a);
         a.click();
@@ -4717,4 +4907,27 @@ function applyPlaylistPosition(position) {
     if (dropdown) {
         dropdown.setAttribute('data-position', position);
     }
+}
+
+// ===== 回到顶部按钮功能 =====
+const backToTopBtn = document.getElementById('back-to-top');
+const contentArea = document.getElementById('content-area');
+
+// 监听滚动事件，显示/隐藏回到顶部按钮
+if (contentArea && backToTopBtn) {
+    contentArea.addEventListener('scroll', function() {
+        if (contentArea.scrollTop > 300) {
+            backToTopBtn.classList.add('visible');
+        } else {
+            backToTopBtn.classList.remove('visible');
+        }
+    });
+
+    // 点击回到顶部
+    backToTopBtn.addEventListener('click', function() {
+        contentArea.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    });
 }

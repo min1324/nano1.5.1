@@ -4,4 +4,9 @@
 files/
 
 logs/
+
 config.yaml
+
+test/
+
+test_*.txt

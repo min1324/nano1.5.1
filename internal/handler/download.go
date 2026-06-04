@@ -11,10 +11,34 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"nano/internal/logger"
 	"nano/internal/service"
 )
+
+// 文件复制缓冲区大小
+const (
+	bufferSize = 32 * 1024 // 32KB
+)
+
+// 缓冲区池，用于并发安全的缓冲区管理
+var bufferPool = sync.Pool{
+	New: func() interface{} {
+		return make([]byte, bufferSize)
+	},
+}
+
+// getBuffer 从池中获取缓冲区
+func getBuffer() []byte {
+	return bufferPool.Get().([]byte)
+}
+
+// putBuffer 将缓冲区放回池中
+func putBuffer(buf []byte) {
+	bufferPool.Put(buf)
+}
+
 
 // handleDownload 下载文件或目录。目录自动打包为 ZIP，单文件支持 asZip 参数打包。
 func handleDownload(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +95,10 @@ func handleDownload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, err = io.Copy(zw, f)
+		// 使用缓冲区提高复制性能
+		buf := getBuffer()
+		defer putBuffer(buf)
+		_, err = io.CopyBuffer(zw, f, buf)
 		if err != nil {
 			logger.Error(getClientIP(r), "下载目录", path, filepath.Base(path), err)
 			return
@@ -93,7 +120,11 @@ func handleDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
 	logger.Info(getClientIP(r), "下载文件", path, filepath.Base(path))
-	io.Copy(w, f)
+	
+	// 使用缓冲区提高复制性能
+	buf := getBuffer()
+	defer putBuffer(buf)
+	io.CopyBuffer(w, f, buf)
 }
 
 // handleBatchDownload 批量下载文件，支持 GET（逗号分隔路径）和 POST（JSON 路径数组），统一打包为 ZIP。
@@ -153,15 +184,17 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				continue
 			}
+			defer f.Close()
 
 			zw, err := zipWriter.Create(info.Name())
 			if err != nil {
-				f.Close()
 				continue
 			}
 
-			io.Copy(zw, f)
-			f.Close()
+			// 使用缓冲区提高复制性能
+			buf := getBuffer()
+			defer putBuffer(buf)
+			io.CopyBuffer(zw, f, buf)
 		}
 	}
 
@@ -205,6 +238,10 @@ func handleDownloadPage(w http.ResponseWriter, r *http.Request) {
 // addDirToZip 将目录递归添加到 zip 写入器中
 // baseName 为 zip 内的根目录名，fullPath 为文件系统上的实际目录路径
 func addDirToZip(zipWriter *zip.Writer, fullPath string, baseName string) error {
+	// 从池中获取缓冲区
+	buf := getBuffer()
+	defer putBuffer(buf)
+
 	return filepath.Walk(fullPath, func(filePath string, fi os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -228,15 +265,15 @@ func addDirToZip(zipWriter *zip.Writer, fullPath string, baseName string) error 
 		if err != nil {
 			return err
 		}
+		defer f.Close()
 
 		zw, err := zipWriter.Create(zipPath)
 		if err != nil {
-			f.Close()
 			return err
 		}
 
-		_, err = io.Copy(zw, f)
-		f.Close()
+		// 使用缓冲区提高复制性能
+		_, err = io.CopyBuffer(zw, f, buf)
 		return err
 	})
 }

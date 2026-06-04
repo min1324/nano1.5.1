@@ -9,7 +9,7 @@ import (
 	"nano/internal/service"
 )
 
-// handleServerInfo 返回服务器信息，包括可访问的IP地址和端口
+// handleServerInfo 返回服务器信息，包括IPv4地址和端口
 func handleServerInfo(w http.ResponseWriter, r *http.Request) {
 	// 获取服务器监听端口
 	port := config.C.Port
@@ -22,8 +22,8 @@ func handleServerInfo(w http.ResponseWriter, r *http.Request) {
 		port = parts[len(parts)-1]
 	}
 
-	// 获取本机所有可用的IP地址
-	var ips []string
+	// 获取本机所有可用的IPv4地址
+	var ipv4s []string
 	interfaces, err := net.Interfaces()
 	if err == nil {
 		for _, iface := range interfaces {
@@ -45,42 +45,30 @@ func handleServerInfo(w http.ResponseWriter, r *http.Request) {
 				}
 				// 只收集IPv4地址，跳过回环地址
 				if ip != nil && ip.To4() != nil && !ip.IsLoopback() {
-					ips = append(ips, ip.String())
+					ipv4s = append(ipv4s, ip.String())
 				}
 			}
 		}
 	}
 
-	// 如果没有找到任何IP地址，使用请求的Host作为备选
-	var preferredIP string
-	if len(ips) > 0 {
-		preferredIP = ips[0]
+	// 如果没有找到任何IPv4地址，使用请求的Host作为备选
+	var ipv4 string
+	if len(ipv4s) > 0 {
+		ipv4 = ipv4s[0]
 	} else {
 		// 从请求的Host中提取IP
 		host := r.Host
 		if strings.Contains(host, ":") {
-			preferredIP = strings.Split(host, ":")[0]
+			ipv4 = strings.Split(host, ":")[0]
 		} else {
-			preferredIP = host
+			ipv4 = host
 		}
 	}
 
-	// 构建可访问的URL列表
-	var urls []string
-	for _, ip := range ips {
-		urls = append(urls, "http://"+ip+":"+port)
-	}
-	// 如果没有找到任何IP地址，使用请求的Host
-	if len(urls) == 0 {
-		urls = append(urls, "http://"+r.Host)
-	}
-
+	// 返回IPv4地址和服务器端口
 	respondWithSuccess(w, map[string]any{
-		"port":        port,
-		"ips":         ips,
-		"preferredIP": preferredIP,
-		"urls":        urls,
-		"primaryUrl":  "http://" + preferredIP + ":" + port,
+		"ipv4": ipv4,
+		"port": port,
 	})
 }
 

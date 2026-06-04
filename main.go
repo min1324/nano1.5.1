@@ -111,6 +111,7 @@ func (f noDirListingFile) Readdir(count int) ([]os.FileInfo, error) {
 }
 
 func main() {
+
 	// 加载配置
 	config.Load()
 
@@ -147,7 +148,13 @@ func main() {
 	fmt.Printf("服务已启动，监听地址: %s\n", address)
 
 	// 使用 http.Server 支持优雅关闭
-	srv := &http.Server{Addr: address, Handler: mux}
+	srv := &http.Server{
+		Addr:         address,
+		Handler:      mux,
+		ReadTimeout:  10 * time.Minute,  // 读取请求超时时间，增加以支持大文件上传
+		WriteTimeout: 10 * time.Minute,  // 写入响应超时时间
+		IdleTimeout:  120 * time.Second, // 空闲连接超时时间
+	}
 
 	// 在 goroutine 中启动服务
 	go func() {
