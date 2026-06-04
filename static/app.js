@@ -3534,10 +3534,24 @@ function updateAuthUI() {
         if (authLevel === 'root' && isRoot) hasPermission = true;
 
         if (hasPermission) {
-            el.classList.remove('auth-disabled');
+            el.classList.remove('auth-disabled', 'auth-hidden');
             el.removeAttribute('data-auth-denied');
+            // 恢复隐藏的菜单项
+            const li = el.closest('li');
+            if (li) li.classList.remove('auth-hidden');
         } else {
-            el.classList.add('auth-disabled');
+            // 下拉菜单项：隐藏整个 li
+            const isMenuItem = el.classList.contains('dropdown-item') || el.classList.contains('user-menu-item');
+            // 设置区块：隐藏整个 section
+            const isSettingsSection = el.classList.contains('settings-section');
+            if (isMenuItem) {
+                const li = el.closest('li');
+                if (li) li.classList.add('auth-hidden');
+            } else if (isSettingsSection) {
+                el.classList.add('auth-hidden');
+            } else {
+                el.classList.add('auth-disabled');
+            }
             el.setAttribute('data-auth-denied', authLevel);
         }
     });
@@ -3867,6 +3881,8 @@ async function changeProfilePassword() {
 function showSettingsModal() {
     const page = document.getElementById('settings-page');
     page.classList.add('show');
+    // 更新权限可见性
+    updateAuthUI();
     // 恢复设置值
     loadSettings();
 }

@@ -547,6 +547,11 @@ body {
     filter: grayscale(100%) !important;
 }
 
+/* 权限不足 - 完全隐藏 */
+.auth-hidden {
+    display: none !important;
+}
+
 /* 设置区块权限不足样式 - 变灰且不可点击 */
 .settings-section.auth-disabled {
     opacity: 0.35 !important;
