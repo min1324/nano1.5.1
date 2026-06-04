@@ -2802,14 +2802,15 @@ body.dark-mode .qr-popup-body canvas {
     [data-resize] {
         display: none !important;
     }
-    /* 移动端预览容器全屏适配 */
+    /* 移动端预览容器适配 */
     .preview-container {
-        width: 100vw !important;
-        height: 100vh !important;
-        max-width: 100vw !important;
-        max-height: 100vh !important;
-        border-radius: 0 !important;
-        border: none !important;
+        width: 85vw !important;
+        height: 85vh !important;
+        max-width: 85vw !important;
+        max-height: 85vh !important;
+        border-radius: var(--radius-md) !important;
+        border: 1px solid var(--border) !important;
+        margin: 7.5vh auto !important;
     }
     /* 移动端图片预览优化 */
     .preview-body {
@@ -4177,6 +4178,47 @@ body.dark-mode .settings-dropdown-menu {
     transition: all var(--transition-fast);
 }
 
+.server-address-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.server-address-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-card);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.server-address-option:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--primary);
+}
+
+.server-address-option input[type="radio"] {
+    margin: 0;
+    cursor: pointer;
+}
+
+.server-address-option span:first-of-type {
+    font-weight: 500;
+    color: var(--text-primary);
+    min-width: 40px;
+}
+
+.server-address-display {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-family: monospace;
+}
+
 .security-add-btn:hover {
     background: var(--primary-light);
     border-color: var(--primary);
@@ -4371,6 +4413,122 @@ body.dark-mode .settings-dropdown-menu {
 
     .full-page-container {
         max-width: 100%;
+    }
+
+    /* 移动端音频播放器样式 */
+    .audio-player {
+        padding: 8px 8px 8px 12px;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+        overflow: visible;
+    }
+
+    .audio-player-info {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 4px;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    .audio-player-left {
+        flex: 0 0 auto;
+        min-width: 0;
+        max-width: 35%;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .audio-player-cover {
+        width: 28px;
+        height: 28px;
+        font-size: 14px;
+        flex-shrink: 0;
+    }
+
+    .audio-player-controls {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        justify-content: center;
+        overflow: hidden;
+    }
+
+    .audio-player-controls-center {
+        gap: 2px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+    }
+
+    .audio-player-text {
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        flex: 1;
+    }
+
+    .audio-player-title {
+        font-size: 11px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .audio-player-artist {
+        font-size: 9px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .audio-player-close {
+        display: flex !important;
+        width: 32px;
+        height: 32px;
+        font-size: 16px;
+        color: var(--text-secondary);
+        flex: 0 0 auto;
+        margin-left: 2px;
+    }
+
+    .audio-player-close:hover {
+        color: var(--text-primary);
+        background: var(--bg-hover);
+    }
+
+    .audio-player-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 12px;
+        flex: 0 0 auto;
+        padding: 4px;
+    }
+
+    .audio-player-play-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 14px;
+        flex: 0 0 auto;
+    }
+
+    .audio-player-right {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+    }
+
+    .audio-player-volume {
+        display: none;
+    }
+
+    .audio-player-progress {
+        padding: 0 4px;
     }
 }
 

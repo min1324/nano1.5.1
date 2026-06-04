@@ -3875,25 +3875,131 @@ async function fetchServerInfo() {
             const data = await response.json();
             serverInfoCache = data.data;
             console.log('Server info loaded:', serverInfoCache);
+            // 更新服务器地址显示
+            updateServerAddressDisplay();
         }
     } catch (error) {
         console.error('Failed to fetch server info:', error);
     }
 }
 
+// 更新服务器地址显示
+function updateServerAddressDisplay() {
+    if (!serverInfoCache) return;
+    
+    const ipv4Display = document.getElementById('server-ipv4-display');
+    const ipv6Display = document.getElementById('server-ipv6-display');
+    
+    if (ipv4Display && serverInfoCache.ipv4) {
+        ipv4Display.textContent = serverInfoCache.ipv4 + ':' + serverInfoCache.port;
+    }
+    
+    if (ipv6Display && serverInfoCache.ipv6) {
+        ipv6Display.textContent = serverInfoCache.ipv6 + ':' + serverInfoCache.port;
+    } else if (ipv6Display) {
+        ipv6Display.textContent = '不可用';
+        document.getElementById('server-address-ipv6').disabled = true;
+    }
+    
+    // 加载保存的服务器地址偏好
+    loadServerAddressPreference();
+}
+
+// 加载服务器地址偏好
+function loadServerAddressPreference() {
+    const preference = localStorage.getItem('serverAddressPreference');
+    if (preference) {
+        const radio = document.querySelector(`input[name="server-address"][value="${preference}"]`);
+        if (radio && !radio.disabled) {
+            radio.checked = true;
+        }
+    } else {
+        // 默认选择IPv4
+        const ipv4Radio = document.getElementById('server-address-ipv4');
+        if (ipv4Radio) {
+            ipv4Radio.checked = true;
+        }
+    }
+}
+
+// 保存服务器地址偏好
+function saveServerAddressPreference() {
+    const selected = document.querySelector('input[name="server-address"]:checked');
+    if (selected) {
+        localStorage.setItem('serverAddressPreference', selected.value);
+    }
+}
+
+// 初始化服务器地址选项
+function initServerAddressOptions() {
+    const ipv4Radio = document.getElementById('server-address-ipv4');
+    const ipv6Radio = document.getElementById('server-address-ipv6');
+    
+    // 重新生成二维码的函数
+    function regenerateQrCode() {
+        const qrBody = document.getElementById('topbar-qrcode-body');
+        if (qrBody) {
+            qrBody.innerHTML = '';
+            // 触发二维码重新生成
+            const wrapper = document.querySelector('.topbar-qrcode-wrapper');
+            if (wrapper) {
+                // 重置currentUrl，强制重新生成
+                const event = new CustomEvent('regenerate-qr');
+                wrapper.dispatchEvent(event);
+            }
+        }
+    }
+    
+    if (ipv4Radio) {
+        ipv4Radio.addEventListener('change', function() {
+            saveServerAddressPreference();
+            regenerateQrCode();
+        });
+    }
+    
+    if (ipv6Radio) {
+        ipv6Radio.addEventListener('change', function() {
+            saveServerAddressPreference();
+            regenerateQrCode();
+        });
+    }
+}
+
 // ===== 获取局域网可访问的URL（使用服务端IP信息） =====
 function getLanUrl(urlStr) {
-    if (!serverInfoCache || !serverInfoCache.preferredIP) return urlStr;
+    if (!serverInfoCache) return urlStr;
+    
+    // 获取用户选择的服务器地址偏好
+    const preference = localStorage.getItem('serverAddressPreference') || 'ipv4';
+    let preferredIP = null;
+    
+    if (preference === 'ipv6' && serverInfoCache.ipv6) {
+        preferredIP = serverInfoCache.ipv6;
+    } else if (serverInfoCache.ipv4) {
+        preferredIP = serverInfoCache.ipv4;
+    }
+
+
+    
+    if (!preferredIP) return urlStr;
+
     try {
         var url = new URL(urlStr);
-        if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
-            url.hostname = serverInfoCache.preferredIP;
-        }
+        // 替换hostname为用户选择的服务器地址
+        // 如果是IPv6地址，需要去掉方括号
+        const hostname = preferredIP.startsWith('[') ? preferredIP.slice(1, -1) : preferredIP;
+        // IPv6地址需要用方括号包围
+        const host = preferredIP.startsWith('[') ? preferredIP : `[${hostname}]`;
+        // 设置host属性，包含端口号
+        url.host = url.port ? host + ':' + url.port : host;
         return url.toString();
     } catch(e) {
-        if (serverInfoCache && serverInfoCache.preferredIP) {
-            urlStr = urlStr.replace("//localhost", "//" + serverInfoCache.preferredIP);
-            urlStr = urlStr.replace("//127.0.0.1", "//" + serverInfoCache.preferredIP);
+        // 如果URL解析失败，尝试直接替换
+        const hostnameMatch = urlStr.match(/\/\/([^\/]+)/);
+        if (hostnameMatch) {
+            // IPv6地址需要用方括号包围
+            const replacement = preferredIP.startsWith('[') ? preferredIP : `[${preferredIP}]`;
+            urlStr = urlStr.replace(hostnameMatch[0], "//" + replacement);
         }
         return urlStr;
     }
@@ -3946,6 +4052,12 @@ function initTopbarQrCode() {
     wrapper.addEventListener('mouseenter', function() {
         generateQr();
     });
+    
+    // 添加regenerate-qr事件监听，用于强制重新生成二维码
+    wrapper.addEventListener('regenerate-qr', function() {
+        currentUrl = ''; // 重置currentUrl，强制重新生成
+        generateQr();
+    });
 }
 
 // ===== 初始化 =====
@@ -3972,6 +4084,8 @@ document.addEventListener("DOMContentLoaded", async function() {
     await fetchServerInfo();
     // 初始化顶部二维码
     initTopbarQrCode();
+    // 初始化服务器地址选项
+    initServerAddressOptions();
     // 启动自动锁定计时器
     resetAutoLockTimer();
 });
