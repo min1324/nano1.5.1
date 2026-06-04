@@ -15,14 +15,18 @@ import (
 )
 
 // 全局重命名映射，用于跨批次上传时保持文件夹结构一致
-// key: 会话ID:原始文件夹名, value: 重命名后的文件夹名
+//
+// key: 会话ID:原始文件夹名
+// value: 重命名后的文件夹名
 var (
-	globalRenameMap      = make(map[string]string)
-	renameMapMutex       sync.RWMutex
-	renameMapLastUpdated time.Time
+	globalRenameMap      = make(map[string]string) // 重命名映射表
+	renameMapMutex       sync.RWMutex               // 读写锁，保护映射表的并发访问
+	renameMapLastUpdated time.Time                  // 最后更新时间，用于判断是否需要清理
 )
 
-// 清理过期的重命名映射（超过1小时未使用）
+// cleanupExpiredRenameMaps 清理过期的重命名映射（超过1小时未使用）
+//
+// 该函数会清空 globalRenameMap 并更新最后更新时间戳
 func cleanupExpiredRenameMaps() {
 	renameMapMutex.Lock()
 	defer renameMapMutex.Unlock()
@@ -34,7 +38,9 @@ func cleanupExpiredRenameMaps() {
 	}
 }
 
-// 初始化时启动清理任务
+// init 初始化时启动清理任务
+//
+// 每小时执行一次清理操作，防止内存泄漏
 func init() {
 	go func() {
 		for {
@@ -44,7 +50,23 @@ func init() {
 	}()
 }
 
-// handleUpload 处理文件上传
+// handleUpload 处理文件上传请求
+//
+// 请求参数：
+//   - path: 目标目录路径
+//   - conflict: 冲突处理策略（rename/overwrite/skip），默认为 rename
+//   - files: 多个文件（multipart/form-data）
+//   - file: 单个文件（multipart/form-data），与 files 二选一
+//   - pathMap: 路径映射，用于保持文件夹结构（JSON 格式）
+//   - uploadSessionId: 上传会话ID，用于隔离不同上传操作的重命名映射
+//
+// 响应数据：
+//   - uploadedCount: 成功上传的文件数
+//   - failedCount: 上传失败的文件数
+//
+// 错误处理：
+//   - 路径不安全时返回 400 错误
+//   - 未提供文件时返回 400 错误
 func handleUpload(w http.ResponseWriter, r *http.Request) {
 	// 增加内存限制以支持更多文件上传，但使用流式处理避免内存溢出
 	if err := r.ParseMultipartForm(128 << 20); err != nil {

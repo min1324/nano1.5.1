@@ -1,3 +1,20 @@
+// Package handler 实现 HTTP 请求处理器，处理所有 API 路由的业务逻辑。
+//
+// 按功能划分为多个文件：
+//   - auth.go      — 用户认证（登录/登出/令牌验证）
+//   - list.go      — 文件列表查询
+//   - upload.go    — 文件上传
+//   - file_ops.go  — 文件操作（创建/删除/移动/复制/重命名）
+//   - preview.go   — 文件预览
+//   - download.go  — 文件下载（单文件/批量/目录ZIP/下载页面）
+//   - editor.go    — 文件在线编辑（读取/保存）
+//   - search.go    — 文件搜索
+//   - security.go  — 安全配置与用户管理（管理员）
+//   - server_info.go — 服务器信息与存储空间
+//   - mime.go      — MIME 类型映射
+//   - response.go  — 统一响应处理
+//   - routes.go    — 路由注册与方法守卫
+//   - util.go      — 通用工具函数（getClientIP、formatSize）
 package handler
 
 import (

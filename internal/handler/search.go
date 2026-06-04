@@ -8,6 +8,22 @@ import (
 )
 
 // handleSearch 搜索文件
+//
+// 请求参数：
+//   - q: 搜索关键词（必填）
+//   - path: 搜索路径，为空时默认为根目录"/"
+//   - recursive: 是否递归搜索子目录，默认为 true
+//
+// 响应数据：
+//   - files: 匹配的文件项列表
+//   - query: 搜索关键词
+//   - path: 搜索路径
+//   - count: 匹配的文件数量
+//
+// 错误处理：
+//   - 搜索关键词为空时返回 400 错误
+//   - 路径不安全时返回 400 错误
+//   - 搜索失败时返回 500 错误
 func handleSearch(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	if query == "" {
