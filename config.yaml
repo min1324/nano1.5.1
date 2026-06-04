@@ -1,0 +1,22 @@
+port: :8080
+uploadDir: ./files
+maxStorage: 10GB
+previewMaxSize: 10MB
+logDir: ./logs
+logLevel: info
+logMaxSize: 100MB
+logMaxBackups: 7
+logMaxAge: 30
+users:
+    - username: root
+      password: $2a$10$HZuL4a/rEB9us8UimKPmquuaJU7YnIPpprJjBITe0S9Nm6yc0L3nS
+      type: root
+      displayName: Root
+    - username: admin
+      password: $2a$10$oqzgyA0r9NY28v.7gdWFDuLQvMDQMoRXrraLtbc.b8UVDRAHzr62K
+      type: admin
+      displayName: Admin
+    - username: user
+      password: $2a$10$ePx5XI8RtdLd652uzid1r.31NA5e76xL7vCswOXskUbnHISXNX6zu
+      type: user
+      displayName: User

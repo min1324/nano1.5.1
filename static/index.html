@@ -1,0 +1,952 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NanoCloud - 文件管理系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css?v=6.2">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+</head>
+<body>
+    <div class="app">
+        <!-- 顶部导航栏 -->
+        <header class="topbar" id="topbar">
+            <div class="topbar-left">
+                <div class="topbar-brand">
+                    <div class="brand-icon"><i class="fas fa-cloud"></i></div>
+                    <span class="brand-text">NanoCloud</span>
+                </div>
+
+            </div>
+            <div class="topbar-right">
+                <div class="topbar-qrcode-wrapper">
+                    <button class="topbar-qrcode-btn" id="topbar-qrcode-btn" title="手机访问">
+                        <i class="fas fa-mobile-alt"></i>
+                    </button>
+                    <div class="topbar-qrcode-popup" id="topbar-qrcode-popup">
+                        <div class="topbar-qrcode-title"><i class="fas fa-qrcode"></i><span>扫码访问</span></div>
+                        <div id="topbar-qrcode-body" class="topbar-qrcode-body"></div>
+                        <div class="topbar-qrcode-tip">使用手机扫描二维码打开网站</div>
+                    </div>
+                </div>
+                <button class="topbar-theme-btn" id="topbar-theme-btn" title="切换主题">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <div class="user-menu dropdown">
+                    <button id="user-menu-btn" class="user-menu-btn" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fas fa-user-circle"></i>
+                        <span id="current-user-name" class="user-menu-name">游客</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end user-menu-dropdown" id="user-menu-dropdown">
+                        <li><a class="dropdown-item user-menu-item" href="#" id="user-info">
+                            <i class="fas fa-user" id="user-info-icon"></i>
+                            <span id="user-info-name">未登录</span>
+                            <span class="user-login-hint" id="user-login-hint">点击登录</span>
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item user-menu-item" href="#" id="settings-menu">
+                            <i class="fas fa-cog"></i>
+                            <span>设置</span>
+                        </a></li>
+                        <li><a class="dropdown-item user-menu-item" href="#" id="security-menu" data-auth="admin">
+                            <i class="fas fa-shield-alt"></i>
+                            <span>管理</span>
+                        </a></li>
+                        <li><a class="dropdown-item user-menu-item" href="#" id="about-menu">
+                            <i class="fas fa-info-circle"></i>
+                            <span>关于</span>
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item user-menu-item" href="#" id="logout-menu">
+                            <i class="fas fa-sign-out-alt"></i>
+                            <span>退出</span>
+                        </a></li>
+                    </ul>
+                </div>
+            </div>
+        </header>
+
+        <!-- 页面内容区 -->
+        <div class="app-body">
+            <!-- 文件管理页面 -->
+            <div class="page-files" id="page-files">
+                <!-- 文件操作工具栏 -->
+                <div class="file-toolbar">
+                    <div class="file-toolbar-left">
+                        <button id="sidebar-toggle-btn" class="file-toolbar-btn" title="切换目录树">
+                            <i class="fas fa-sitemap"></i>
+                        </button>
+                        <div class="file-toolbar-nav">
+                            <button id="back-btn" class="file-toolbar-btn" title="后退" disabled>
+                                <i class="fas fa-arrow-left"></i>
+                            </button>
+                            <button id="forward-btn" class="file-toolbar-btn" title="前进" disabled>
+                                <i class="fas fa-arrow-right"></i>
+                            </button>
+                            <button id="up-btn" class="file-toolbar-btn" title="上级目录">
+                                <i class="fas fa-level-up-alt"></i>
+                            </button>
+                        </div>
+                        <nav class="breadcrumb-nav" id="breadcrumb-container"></nav>
+                    </div>
+                    <div class="file-toolbar-right">
+                        <div class="file-toolbar-search">
+                            <i class="fas fa-search file-toolbar-search-icon"></i>
+                            <input type="text" id="search-input" class="file-toolbar-search-input" placeholder="搜索文件..." />
+                            <button id="search-clear-btn" class="file-toolbar-search-clear" title="清除">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <button id="download-btn" class="file-toolbar-action" disabled>
+                            <i class="fas fa-download"></i>
+                            <span>下载</span>
+                        </button>
+                        <div class="toolbar-dropdown" data-auth="user">
+                            <button id="upload-btn" class="file-toolbar-action">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <span>上传</span>
+                                <i class="fas fa-caret-down" style="font-size:10px;margin-left:2px;"></i>
+                            </button>
+                            <ul class="toolbar-dropdown-menu">
+                                <li><a class="dropdown-item" href="#" id="upload-file-menu">
+                                    <i class="fas fa-file-upload"></i> 上传文件
+                                </a></li>
+                                <li><a class="dropdown-item" href="#" id="upload-folder-menu">
+                                    <i class="fas fa-folder-open"></i> 上传文件夹
+                                </a></li>
+                            </ul>
+                        </div>
+                        <div class="toolbar-dropdown" data-auth="admin">
+                            <button id="create-btn" class="file-toolbar-action">
+                                <i class="fas fa-plus"></i>
+                                <span>新建</span>
+                                <i class="fas fa-caret-down" style="font-size:10px;margin-left:2px;"></i>
+                            </button>
+                            <ul class="toolbar-dropdown-menu">
+                                <li><a class="dropdown-item" href="#" id="create-file-menu">
+                                    <i class="fas fa-file-alt"></i> 新建文件
+                                </a></li>
+                                <li><a class="dropdown-item" href="#" id="create-folder-menu">
+                                    <i class="fas fa-folder-plus"></i> 新建文件夹
+                                </a></li>
+                            </ul>
+                        </div>
+                        <div class="file-toolbar-divider"></div>
+                        <div class="sort-dropdown dropdown">
+                            <button id="sort-btn" class="file-toolbar-btn" title="排序" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-sort-amount-down"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end sort-menu" id="sort-menu">
+                                <li><h6 class="dropdown-header">排序方式</h6></li>
+                                <li><a class="dropdown-item sort-menu-item active" href="#" data-field="name" data-order="asc">
+                                    <i class="fas fa-sort-alpha-down"></i> 名称升序
+                                    <i class="fas fa-check sort-check ms-auto"></i>
+                                </a></li>
+                                <li><a class="dropdown-item sort-menu-item" href="#" data-field="name" data-order="desc">
+                                    <i class="fas fa-sort-alpha-up"></i> 名称降序
+                                    <i class="fas fa-check sort-check ms-auto"></i>
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item sort-menu-item" href="#" data-field="size" data-order="asc">
+                                    <i class="fas fa-sort-numeric-down"></i> 大小升序
+                                    <i class="fas fa-check sort-check ms-auto"></i>
+                                </a></li>
+                                <li><a class="dropdown-item sort-menu-item" href="#" data-field="size" data-order="desc">
+                                    <i class="fas fa-sort-numeric-up"></i> 大小降序
+                                    <i class="fas fa-check sort-check ms-auto"></i>
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item sort-menu-item" href="#" data-field="modified" data-order="desc">
+                                    <i class="fas fa-sort-amount-down"></i> 最新修改
+                                    <i class="fas fa-check sort-check ms-auto"></i>
+                                </a></li>
+                                <li><a class="dropdown-item sort-menu-item" href="#" data-field="modified" data-order="asc">
+                                    <i class="fas fa-sort-amount-up"></i> 最早修改
+                                    <i class="fas fa-check sort-check ms-auto"></i>
+                                </a></li>
+                            </ul>
+                        </div>
+                        <button id="refresh-btn" class="file-toolbar-btn" title="刷新">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <div class="view-toggle">
+                            <button id="grid-view-btn" class="view-toggle-btn active" title="网格视图">
+                                <i class="fas fa-th-large"></i>
+                            </button>
+                            <button id="list-view-btn" class="view-toggle-btn" title="列表视图">
+                                <i class="fas fa-list"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 文件内容区域 -->
+                <div class="file-content">
+                    <!-- 目录树侧栏 -->
+                    <aside class="sidebar" id="sidebar">
+                        <div class="sidebar-section">
+                            <div class="sidebar-section-title">
+                                <span>目录结构</span>
+                                <button id="sidebar-collapse-btn" class="sidebar-collapse-btn" title="折叠侧边栏">
+                                    <i class="fas fa-angles-left"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="sidebar-tree">
+                            <div class="file-tree">
+                                <div class="tree-node">
+                                    <div class="tree-item tree-root" data-path="/">
+                                        <i class="fas fa-chevron-down tree-toggle"></i>
+                                        <i class="fas fa-home tree-icon"></i>
+                                        <span class="tree-label">根目录</span>
+                                    </div>
+                                    <div id="tree-container" class="tree-children"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="sidebar-footer">
+                            <div class="storage-info">
+                                <div class="storage-bar">
+                                    <div class="storage-bar-fill" id="storage-used" style="width: 0%"></div>
+                                </div>
+                                <span class="storage-text" id="storage-text">计算中...</span>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <!-- 侧边栏遮罩（移动端） -->
+                    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+                    <!-- 文件列表 -->
+                    <main class="main">
+                        <div class="content" id="content-area">
+                            <div id="file-container" class="file-container grid-view"></div>
+                        </div>
+                        <div class="status-bar" id="status-bar">
+                            <div class="status-bar-left">
+                                <span id="file-count-info"></span>
+                                <span id="selected-file-info" class="selected-file-info"></span>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 上传文件对话框 -->
+    <div id="upload-modal" class="modal-overlay" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <h5>上传文件</h5>
+                </div>
+                <button class="modal-close-btn" aria-label="关闭"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="upload-dropzone" id="upload-dropzone">
+                    <div id="upload-dropzone-placeholder" class="dropzone-placeholder">
+                        <i class="fas fa-cloud-upload-alt dropzone-icon"></i>
+                        <p class="dropzone-text">拖拽文件到此处，或点击选择文件</p>
+                    </div>
+                    <div id="upload-file-list" class="dropzone-file-list" style="display:none;">
+                        <div class="dropzone-file-list-header">
+                            <span class="dropzone-file-list-title"><i class="fas fa-list"></i> 已选择文件</span>
+                            <span id="upload-file-count" class="dropzone-file-count"></span>
+                            <button id="upload-clear-btn" class="dropzone-clear-btn" title="清除选择">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div id="upload-file-items" class="dropzone-file-items"></div>
+                        <p class="dropzone-hint">点击此区域重新选择文件</p>
+                    </div>
+                    <input type="file" id="file-input" multiple class="dropzone-input">
+                </div>
+                <div id="upload-progress" class="upload-progress">
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill progress-bar-animated" style="width:0%"></div>
+                    </div>
+                    <div class="progress-text">0%</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-secondary modal-cancel">取消</button>
+                <button id="upload-confirm-btn" class="modal-btn modal-btn-primary">上传</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 上传文件夹对话框 -->
+    <div id="upload-folder-modal" class="modal-overlay" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fas fa-folder-upload"></i>
+                    <h5>上传文件夹</h5>
+                </div>
+                <button class="modal-close-btn" aria-label="关闭"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="upload-dropzone" id="folder-dropzone">
+                    <div id="folder-dropzone-placeholder" class="dropzone-placeholder">
+                        <i class="fas fa-folder-open dropzone-icon"></i>
+                        <p class="dropzone-text">选择要上传的文件夹</p>
+                    </div>
+                    <div id="folder-file-list" class="dropzone-file-list" style="display:none;">
+                        <div class="dropzone-file-list-header">
+                            <span class="dropzone-file-list-title"><i class="fas fa-list"></i> 待上传文件</span>
+                            <span id="folder-file-count" class="dropzone-file-count"></span>
+                            <button id="folder-clear-btn" class="dropzone-clear-btn" title="清除选择">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div id="folder-file-items" class="dropzone-file-items"></div>
+                        <p class="dropzone-hint">点击此区域重新选择文件夹</p>
+                    </div>
+                    <input type="file" id="folder-input" webkitdirectory directory multiple class="dropzone-input">
+                </div>
+                <div id="folder-upload-progress" class="upload-progress">
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill progress-bar-animated" style="width:0%"></div>
+                    </div>
+                    <div class="progress-text">0%</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-secondary modal-cancel">取消</button>
+                <button id="upload-folder-confirm-btn" class="modal-btn modal-btn-primary">上传</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新建文件夹对话框 -->
+    <div id="folder-modal" class="modal-overlay" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fas fa-folder-plus"></i>
+                    <h5>新建文件夹</h5>
+                </div>
+                <button class="modal-close-btn" aria-label="关闭"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">文件夹名称</label>
+                    <input type="text" id="folder-name-input" placeholder="请输入文件夹名称" class="form-input">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-secondary modal-cancel">取消</button>
+                <button id="create-folder-confirm-btn" class="modal-btn modal-btn-primary">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新建文件对话框 -->
+    <div id="create-file-modal" class="modal-overlay" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fas fa-file-alt"></i>
+                    <h5>新建文件</h5>
+                </div>
+                <button class="modal-close-btn" aria-label="关闭"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">文件名称</label>
+                    <input type="text" id="create-file-name-input" placeholder="请输入文件名称（如 note.txt）" class="form-input">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-secondary modal-cancel">取消</button>
+                <button id="create-file-confirm-btn" class="modal-btn modal-btn-primary">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 重命名对话框 -->
+    <div id="rename-modal" class="modal-overlay" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fas fa-edit"></i>
+                    <h5>重命名</h5>
+                </div>
+                <button class="modal-close-btn" aria-label="关闭"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">新名称</label>
+                    <input type="text" id="rename-input" placeholder="请输入新名称" class="form-input">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-secondary modal-cancel">取消</button>
+                <button id="rename-confirm-btn" class="modal-btn modal-btn-primary">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 移动/复制对话框 -->
+    <div id="move-copy-modal" class="modal-overlay" tabindex="-1">
+        <div class="modal-dialog modal-dialog-lg">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fas fa-exchange-alt"></i>
+                    <h5 id="move-copy-title">移动文件</h5>
+                </div>
+                <button class="modal-close-btn" aria-label="关闭"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body modal-body-scroll">
+                <div class="form-group">
+                    <label class="form-label">选择目标目录</label>
+                </div>
+                <div id="destination-tree" class="destination-tree"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-secondary modal-cancel">取消</button>
+                <button id="move-copy-confirm-btn" class="modal-btn modal-btn-primary">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div id="context-menu" class="context-menu">
+        <div class="context-menu-item" data-action="open">
+            <i class="fas fa-folder-open"></i>
+            <span>打开</span>
+        </div>
+        <div class="context-menu-item" data-action="preview">
+            <i class="fas fa-eye"></i>
+            <span>预览</span>
+        </div>
+        <div class="context-menu-item" data-action="edit" data-auth="admin">
+            <i class="fas fa-edit"></i>
+            <span>编辑</span>
+        </div>
+        <div class="context-menu-item" data-action="download">
+            <i class="fas fa-download"></i>
+            <span>下载</span>
+        </div>
+        <div class="context-menu-divider" data-auth="user"></div>
+        <div class="context-menu-item" data-action="copy" data-auth="admin">
+            <i class="fas fa-copy"></i>
+            <span>复制</span>
+        </div>
+        <div class="context-menu-item" data-action="move" data-auth="admin">
+            <i class="fas fa-arrows-alt"></i>
+            <span>移动</span>
+        </div>
+        <div class="context-menu-item" data-action="rename" data-auth="admin">
+            <i class="fas fa-pen"></i>
+            <span>重命名</span>
+        </div>
+        <div class="context-menu-divider" data-auth="admin"></div>
+        <div class="context-menu-item danger" data-action="delete" data-auth="admin">
+            <i class="fas fa-trash-alt"></i>
+            <span>删除</span>
+        </div>
+    </div>
+
+    <!-- 文件预览模态框 -->
+    <div id="preview-modal" class="modal-overlay">
+        <div class="preview-container">
+            <div class="preview-header">
+                <div class="preview-title">
+                    <i class="fas fa-eye"></i>
+                    <span id="preview-title">文件预览</span>
+                </div>
+                <div class="preview-actions">
+                    <button class="modal-action-btn" id="preview-fullscreen-btn" data-title="全屏">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                    <button class="modal-action-btn" id="editor-save-btn" data-title="保存 (Ctrl+S)" style="display:none">
+                        <i class="fas fa-save"></i>
+                    </button>
+                    <button class="modal-action-btn" id="preview-download-btn" data-title="下载">
+                        <i class="fas fa-download"></i>
+                    </button>
+                    <button class="modal-action-btn" id="preview-close-btn" data-title="关闭 (Esc)">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="preview-body" id="preview-body"></div>
+            <div class="editor-body" id="editor-body" style="display:none">
+                <pre class="editor-highlight" id="editor-highlight"></pre>
+                <textarea id="editor-textarea" class="editor-textarea" spellcheck="false" placeholder="文件内容将在此处显示..."></textarea>
+            </div>
+            <div class="resize-handle-l" data-resize="preview-l"></div>
+            <div class="resize-handle-t" data-resize="preview-t"></div>
+            <div class="resize-handle-r" data-resize="preview-r"></div>
+            <div class="resize-handle-b" data-resize="preview-b"></div>
+            <div class="resize-handle-lt" data-resize="preview-lt"></div>
+            <div class="resize-handle-rt" data-resize="preview-rt"></div>
+            <div class="resize-handle-lb" data-resize="preview-lb"></div>
+            <div class="resize-handle-rb" data-resize="preview-rb"></div>
+            <div class="preview-footer">
+                <div class="preview-status">
+                    <span id="preview-file-info"><i class="fas fa-file"></i> 文件预览</span>
+                    <span id="editor-line-col" style="display:none"><i class="fas fa-map-marker-alt"></i> 行 1, 列 1</span>
+                    <span id="editor-file-size" style="display:none"><i class="fas fa-file"></i> 0 字节</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 未保存确认对话框 -->
+    <div id="unsaved-confirm-modal" class="modal-overlay">
+        <div class="modal-dialog" style="width:360px">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h5>未保存的更改</h5>
+                </div>
+            </div>
+            <div class="modal-body">
+                <p style="color:var(--text-secondary);font-size:14px;margin:0">文件已修改但未保存，是否保存更改？</p>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn modal-btn-secondary" id="unsaved-discard-btn" style="margin-right:auto;color:var(--text-muted)">不保存</button>
+                <button class="modal-btn modal-btn-secondary" id="unsaved-cancel-btn">取消</button>
+                <button class="modal-btn modal-btn-primary" id="unsaved-save-btn">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 登录验证页面 -->
+    <div id="login-page" class="login-page">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="login-logo">
+                    <div class="login-logo-icon"><i class="fas fa-cloud"></i></div>
+                    <h1 class="login-title">NanoCloud</h1>
+                    <p class="login-subtitle">轻量级文件管理系统</p>
+                </div>
+                <div class="login-form">
+                    <div class="login-form-group">
+                        <div class="login-input-wrapper">
+                            <i class="fas fa-user login-input-icon"></i>
+                            <input type="text" id="login-username" value="admin" placeholder="请输入用户名" class="login-input" autocomplete="username">
+                        </div>
+                    </div>
+                    <div class="login-form-group">
+                        <div class="login-input-wrapper">
+                            <i class="fas fa-lock login-input-icon"></i>
+                            <input type="password" id="login-password" value="123456"  placeholder="请输入密码" class="login-input" autocomplete="current-password">
+                        </div>
+                    </div>
+                    <button id="login-confirm-btn" class="login-btn">
+                        <i class="fas fa-sign-in-alt"></i>
+                        <span>登 录</span>
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置页面 -->
+    <div id="settings-page" class="full-page">
+        <div class="full-page-container">
+            <div class="full-page-card">
+                <div class="full-page-header">
+                    <button class="full-page-back-btn" id="settings-back-btn">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <h2 class="full-page-title">
+                        <i class="fas fa-cog"></i>
+                        <span>设置</span>
+                    </h2>
+
+                </div>
+                <div class="full-page-body">
+                    <!-- 外观设置 -->
+                    <div class="settings-section">
+                        <h6 class="settings-section-title">外观设置</h6>
+                        <div class="settings-item">
+                            <div class="settings-item-label">
+                                <i class="fas fa-palette"></i>
+                                <span>主题模式</span>
+                            </div>
+                            <div class="theme-toggle">
+                                <button class="theme-btn" data-theme="light" title="浅色模式">
+                                    <i class="fas fa-sun"></i>
+                                </button>
+                                <button class="theme-btn" data-theme="dark" title="深色模式">
+                                    <i class="fas fa-moon"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 文件显示 -->
+                    <div class="settings-section">
+                        <h6 class="settings-section-title">文件显示</h6>
+                        <div class="settings-item">
+                            <div class="settings-item-label">
+                                <i class="fas fa-th"></i>
+                                <span>默认视图</span>
+                            </div>
+                            <div class="settings-toggle-group">
+                                <button class="settings-toggle-btn active" data-view="grid" title="网格视图">
+                                    <i class="fas fa-th-large"></i>
+                                </button>
+                                <button class="settings-toggle-btn" data-view="list" title="列表视图">
+                                    <i class="fas fa-list"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-label">
+                                <i class="fas fa-sort"></i>
+                                <span>默认排序</span>
+                            </div>
+                            <div class="settings-dropdown-wrapper" id="settings-default-sort-wrapper">
+                                <div class="settings-dropdown-trigger" data-value="name">
+                                    <span class="settings-dropdown-text">按名称</span>
+                                    <i class="fas fa-chevron-down settings-dropdown-arrow"></i>
+                                </div>
+                                <div class="settings-dropdown-menu">
+                                    <div class="settings-dropdown-item active" data-value="name"><span>按名称</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                                    <div class="settings-dropdown-item" data-value="size"><span>按大小</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                                    <div class="settings-dropdown-item" data-value="time"><span>按时间</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                                    <div class="settings-dropdown-item" data-value="type"><span>按类型</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-label">
+                                <i class="fas fa-eye"></i>
+                                <span>显示隐藏文件</span>
+                            </div>
+                            <label class="settings-switch">
+                                <input type="checkbox" id="settings-show-hidden">
+                                <span class="settings-switch-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <!-- 上传设置 -->
+                    <div class="settings-section">
+                        <h6 class="settings-section-title">上传设置</h6>
+                        <div class="settings-item">
+                            <div class="settings-item-label">
+                                <i class="fas fa-exchange-alt"></i>
+                                <span>上传冲突策略</span>
+                            </div>
+                            <div class="settings-dropdown-wrapper" id="settings-upload-conflict-wrapper">
+                                <div class="settings-dropdown-trigger" data-value="rename">
+                                    <span class="settings-dropdown-text">重命名</span>
+                                    <i class="fas fa-chevron-down settings-dropdown-arrow"></i>
+                                </div>
+                                <div class="settings-dropdown-menu">
+                                    <div class="settings-dropdown-item active" data-value="rename"><span>重命名</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                                    <div class="settings-dropdown-item" data-value="overwrite"><span>覆盖</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                                    <div class="settings-dropdown-item" data-value="skip"><span>跳过</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 安全设置 -->
+                    <div class="settings-section">
+                        <h6 class="settings-section-title">安全设置</h6>
+                        <div class="settings-item">
+                            <div class="settings-item-label">
+                                <i class="fas fa-lock"></i>
+                                <span>自动锁定</span>
+                            </div>
+                            <div class="settings-dropdown-wrapper" id="settings-auto-lock-wrapper">
+                                <div class="settings-dropdown-trigger" data-value="0">
+                                    <span class="settings-dropdown-text">不自动锁定</span>
+                                    <i class="fas fa-chevron-down settings-dropdown-arrow"></i>
+                                </div>
+                                <div class="settings-dropdown-menu">
+                                    <div class="settings-dropdown-item active" data-value="0"><span>不自动锁定</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                                    <div class="settings-dropdown-item" data-value="5"><span>5 分钟</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                                    <div class="settings-dropdown-item" data-value="15"><span>15 分钟</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                                    <div class="settings-dropdown-item" data-value="30"><span>30 分钟</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                                    <div class="settings-dropdown-item" data-value="60"><span>1 小时</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 数据管理 -->
+                    <div class="settings-section">
+                        <h6 class="settings-section-title">数据管理</h6>
+                        <div class="settings-item">
+                            <div class="settings-item-label">
+                                <i class="fas fa-trash-alt"></i>
+                                <span>清除缓存</span>
+                            </div>
+                            <button class="settings-action-btn" id="settings-clear-cache">
+                                <i class="fas fa-broom"></i>
+                                <span>清除</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 管理页面 -->
+    <div id="security-page" class="full-page">
+        <div class="full-page-container">
+            <div class="full-page-card">
+                <div class="full-page-header">
+                    <button class="full-page-back-btn" id="security-back-btn">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <h2 class="full-page-title">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>管理</span>
+                    </h2>
+                    <button class="full-page-action-btn" id="security-save-config">
+                        <i class="fas fa-save"></i>
+                        <span>保存</span>
+                    </button>
+                </div>
+                <div class="full-page-body">
+                    <!-- 存储配置 -->
+                    <div class="settings-section">
+                        <h6 class="settings-section-title">存储配置</h6>
+                        <div class="settings-item">
+                            <div class="settings-item-label">
+                                <i class="fas fa-database"></i>
+                                <span>容量上限</span>
+                            </div>
+                            <div class="security-input-group">
+                                 <span class="security-input-hint">支持 MB、GB、TB</span>
+                                <input type="text" id="security-max-storage" class="security-input" placeholder="如：10GB">
+                               
+                            </div>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-label">
+                                <i class="fas fa-eye"></i>
+                                <span>预览大小限制</span>
+                            </div>
+                            <div class="security-input-group">
+                                <span class="security-input-hint">超过此大小的文件不支持在线预览</span>
+                                <input type="text" id="security-preview-max-size" class="security-input" placeholder="如：10MB">
+                                
+                            </div>
+                        </div>
+
+                    </div>
+                    <!-- 用户管理 -->
+                    <div class="settings-section">
+                        <h6 class="settings-section-title">
+                            用户管理
+                            <button class="security-add-btn" id="security-add-user-btn" title="添加用户">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </h6>
+                        <div id="security-user-list" class="security-user-list">
+                            <!-- 用户列表动态生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加/编辑用户弹窗 -->
+    <div id="user-edit-modal" class="modal-overlay">
+        <div class="modal-dialog security-modal">
+            <div class="modal-header">
+                <h5 id="user-edit-modal-title">添加用户</h5>
+                <button class="modal-close-btn" id="user-edit-modal-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="security-form-group">
+                    <label>用户名</label>
+                    <input type="text" id="user-edit-username" class="security-input" placeholder="输入用户名">
+                </div>
+                <div class="security-form-group">
+                    <label>密码</label>
+                    <input type="password" id="user-edit-password" class="security-input" placeholder="输入密码">
+                </div>
+                <div class="security-form-group">
+                    <label>用户类型</label>
+                    <div class="settings-dropdown-wrapper" id="user-edit-type-wrapper">
+                        <div class="settings-dropdown-trigger" data-value="user">
+                            <span class="settings-dropdown-text">普通用户</span>
+                            <i class="fas fa-chevron-down settings-dropdown-arrow"></i>
+                        </div>
+                        <div class="settings-dropdown-menu">
+                            <div class="settings-dropdown-item" data-value="root"><span>Root</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                            <div class="settings-dropdown-item" data-value="admin"><span>管理员</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                            <div class="settings-dropdown-item active" data-value="user"><span>普通用户</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="security-form-group">
+                    <label>显示名称</label>
+                    <input type="text" id="user-edit-displayname" class="security-input" placeholder="输入显示名称">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="user-edit-cancel-btn">取消</button>
+                <button class="btn btn-primary" id="user-edit-save-btn">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户信息页面 -->
+    <div id="profile-page" class="full-page">
+        <div class="full-page-container">
+            <div class="full-page-card">
+                <div class="full-page-header">
+                    <button class="full-page-back-btn" id="profile-back-btn">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <h2 class="full-page-title">
+                        <i class="fas fa-user-circle"></i>
+                        <span>个人信息</span>
+                    </h2>
+
+                </div>
+                <div class="full-page-body">
+                    <!-- 用户信息卡片 -->
+                    <div class="profile-card">
+                        <div class="profile-avatar" id="profile-avatar">
+                            <i class="fas fa-user-circle"></i>
+                        </div>
+                        <div class="profile-info">
+                            <div class="profile-displayname" id="profile-username"></div>
+                            <div class="profile-meta">
+                                <span class="profile-type-badge" id="profile-type-badge"></span>
+                                <span class="profile-account" id="profile-account"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 基本信息 -->
+                    <div class="profile-section">
+                        <div class="profile-section-title">基本信息</div>
+                        <div class="profile-field">
+                            <label class="profile-field-label">
+                                <i class="fas fa-id-card"></i>
+                                <span>显示名称</span>
+                            </label>
+                            <input type="text" id="profile-displayname" class="profile-input" placeholder="输入显示名称">
+                        </div>
+                    </div>
+
+                    <!-- 修改密码 -->
+                    <div class="profile-section">
+                        <div class="profile-section-title">修改密码</div>
+                        <div class="profile-field">
+                            <label class="profile-field-label">
+                                <i class="fas fa-key"></i>
+                                <span>当前密码</span>
+                            </label>
+                            <input type="password" id="profile-old-password" class="profile-input" placeholder="输入当前密码">
+                        </div>
+                        <div class="profile-field">
+                            <label class="profile-field-label">
+                                <i class="fas fa-lock"></i>
+                                <span>新密码</span>
+                            </label>
+                            <input type="password" id="profile-new-password" class="profile-input" placeholder="输入新密码">
+                        </div>
+                        <div class="profile-field">
+                            <label class="profile-field-label">
+                                <i class="fas fa-lock"></i>
+                                <span>确认密码</span>
+                            </label>
+                            <input type="password" id="profile-confirm-password" class="profile-input" placeholder="再次输入新密码">
+                        </div>
+                        <div class="profile-password-action">
+                            <button class="profile-password-btn" id="profile-change-password-btn">
+                                <i class="fas fa-key"></i>
+                                <span>修改密码</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+      <!-- 关于页面 -->
+    <div id="about-page" class="full-page">
+        <div class="full-page-container">
+            <div class="full-page-card">
+                <div class="full-page-header">
+                    <button class="full-page-back-btn" id="about-back-btn">
+                        <i class="fas fa-arrow-left"></i>
+                    </button>
+                    <h2 class="full-page-title">
+                        <i class="fas fa-info-circle"></i>
+                        <span>关于</span>
+                    </h2>
+
+                </div>
+                <div class="full-page-body">
+                    <div class="about-content">
+                        <div class="about-logo">
+                            <i class="fas fa-cloud"></i>
+                        </div>
+                        <h4>NanoCloud</h4>
+                        <p class="about-version">版本 1.0.0</p>
+                        <p class="about-description">轻量级私有云文件管理系统，提供便捷的文件存储和管理功能。</p>
+                        <div class="about-features">
+                            <div class="about-feature-card">
+                                <div class="about-feature-icon"><i class="fas fa-bolt"></i></div>
+                                <h5>极致性能</h5>
+                                <p>基于 Go 语言开发，低内存占用，高并发处理</p>
+                            </div>
+                            <div class="about-feature-card">
+                                <div class="about-feature-icon"><i class="fas fa-shield-alt"></i></div>
+                                <h5>安全可靠</h5>
+                                <p>完善的权限体系，安全的数据传输保护</p>
+                            </div>
+                            <div class="about-feature-card">
+                                <div class="about-feature-icon"><i class="fas fa-mobile-alt"></i></div>
+                                <h5>响应式设计</h5>
+                                <p>完美适配桌面与移动端，随时随地访问</p>
+                            </div>
+                        </div>
+                        <div class="about-info">
+                            <p><i class="fas fa-code"></i> 基于 Go + HTML/CSS/JS 开发</p>
+                            <p><i class="fas fa-server"></i> 轻量级单文件部署</p>
+                            <p><i class="fas fa-lock"></i> 多级用户权限管理</p>
+                            <p><i class="fas fa-folder-open"></i> 文件上传、下载、预览、编辑</p>
+                        </div>
+                        <div class="about-footer">
+                            <p>&copy; 2024 NanoCloud. All rights reserved.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提示消息 -->
+    <div id="toast" class="toast-msg"></div>
+
+    <!-- 下载二维码弹出框 -->
+    <div id="qr-popup" class="qr-popup">
+        <div class="qr-popup-arrow"></div>
+        <div class="qr-popup-header">
+            <i class="fas fa-qrcode"></i>
+            <span>扫码下载</span>
+        </div>
+        <div id="qr-popup-body" class="qr-popup-body"></div>
+        <div class="qr-popup-tip">使用手机扫描二维码下载文件</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
