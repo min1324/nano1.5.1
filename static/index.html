@@ -585,6 +585,23 @@
                                 </button>
                             </div>
                         </div>
+                        <div class="settings-item">
+                            <div class="settings-item-label">
+                                <i class="fas fa-music"></i>
+                                <span>播放列表位置</span>
+                            </div>
+                            <div class="settings-dropdown-wrapper" id="settings-playlist-position-wrapper">
+                                <div class="settings-dropdown-trigger" data-value="left">
+                                    <span class="settings-dropdown-text">左侧</span>
+                                    <i class="fas fa-chevron-down settings-dropdown-arrow"></i>
+                                </div>
+                                <div class="settings-dropdown-menu">
+                                    <div class="settings-dropdown-item active" data-value="left"><span>左侧</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                                    <div class="settings-dropdown-item" data-value="center"><span>中间</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                                    <div class="settings-dropdown-item" data-value="right"><span>右侧</span><i class="fas fa-check settings-dropdown-check"></i></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <!-- 文件显示 -->
                     <div class="settings-section">
@@ -944,6 +961,71 @@
         </div>
         <div id="qr-popup-body" class="qr-popup-body"></div>
         <div class="qr-popup-tip">使用手机扫描二维码下载文件</div>
+    </div>
+
+    <!-- 音频播放器 -->
+    <div id="audio-player" class="audio-player" style="display:none">
+        <div class="audio-player-info">
+            <div class="audio-player-left">
+                <div class="audio-player-cover">
+                    <i class="fas fa-music"></i>
+                </div>
+                <div class="audio-player-text">
+                    <div class="audio-player-title" id="audio-player-title">未播放</div>
+                    <div class="audio-player-artist" id="audio-player-artist">--</div>
+                </div>
+            </div>
+            <div class="audio-player-controls">
+                <div class="audio-player-controls-center">
+                    <button class="audio-player-btn" id="audio-player-playlist" title="播放列表">
+                        <i class="fas fa-list"></i>
+                    </button>
+                    <button class="audio-player-btn" id="audio-player-mode" data-mode="sequential" title="播放模式">
+                        <i class="fas fa-retweet"></i>
+                    </button>
+                    <button class="audio-player-btn" id="audio-player-prev" title="上一首">
+                        <i class="fas fa-step-backward"></i>
+                    </button>
+                    <button class="audio-player-btn audio-player-play-btn" id="audio-player-play" title="播放/暂停">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <button class="audio-player-btn" id="audio-player-next" title="下一首">
+                        <i class="fas fa-step-forward"></i>
+                    </button>
+                    <div class="audio-player-volume">
+                        <button class="audio-player-btn" id="audio-player-volume" title="音量">
+                            <i class="fas fa-volume-up"></i>
+                        </button>
+                        <input type="range" class="audio-player-volume-input" id="audio-volume-input" min="0" max="100" value="100">
+                    </div>
+                </div>
+            </div>
+            <div class="audio-player-right">
+                <button class="audio-player-close" id="audio-player-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="audio-player-progress">
+            <div class="audio-player-time" id="audio-current-time">0:00</div>
+            <div class="audio-player-progress-bar">
+                <div class="audio-player-progress-filled" id="audio-progress-filled"></div>
+                <input type="range" class="audio-player-progress-input" id="audio-progress-input" min="0" max="100" value="0">
+            </div>
+            <div class="audio-player-time" id="audio-total-time">0:00</div>
+        </div>
+        <div class="audio-player-dropdown" id="audio-player-dropdown">
+            <div class="audio-player-dropdown-header">
+                <h3>播放列表</h3>
+                <button class="audio-player-dropdown-close" id="audio-player-dropdown-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="audio-player-dropdown-body" id="audio-player-dropdown-body">
+                <!-- 播放列表项将在这里动态生成 -->
+            </div>
+        </div>
+        <audio id="audio-element"></audio>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

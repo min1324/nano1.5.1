@@ -20,6 +20,12 @@ let currentUser = null; // 当前登录用户
 let currentTheme = localStorage.getItem('theme') || 'light'; // 当前主题
 let authToken = localStorage.getItem('authToken') || ''; // 认证令牌
 let serverInfoCache = null; // 服务器信息缓存（IP地址等）
+let audioPlaylist = []; // 音频播放列表
+let currentAudioIndex = -1; // 当前播放的音频索引
+let audioPlayMode = 'sequential'; // 播放模式: sequential(顺序), random(随机), loop(循环)
+
+// 音频文件扩展名
+const audioExts = ["mp3", "wav", "flac", "aac", "ogg", "m4a", "wma"];
 
 // 拖选相关变量
 let isDragging = false;
@@ -805,6 +811,15 @@ function toggleTreeChildren(childContainer, toggleIcon) {
 
 // ===== 存储空间 =====
 function calculateStorage() {
+    // 未登录时不调用存储空间API
+    if (!authToken || !currentUser) {
+        const storageText = document.getElementById("storage-text");
+        if (storageText) {
+            storageText.textContent = "未登录";
+        }
+        return;
+    }
+
     apiCall('/api/storage')
         .then(data => {
             if (!data.success) return;
@@ -984,7 +999,15 @@ function setupDropzone(dropzoneId, inputId) {
     const dropzone = document.getElementById(dropzoneId);
     const fileInput = document.getElementById(inputId);
 
-    dropzone.addEventListener("click", function() { fileInput.click(); });
+    fileInput.addEventListener("click", function(e) {
+        e.stopPropagation();
+    });
+
+    dropzone.addEventListener("click", function(e) {
+        if (e.target !== fileInput) {
+            fileInput.click();
+        }
+    });
 
     dropzone.addEventListener("dragover", function(e) {
         e.preventDefault();
@@ -2021,6 +2044,425 @@ function handleContextMenuAction(action) {
     hideContextMenu();
 }
 
+// ===== 音频播放 =====
+function playAudio(url, name, path) {
+    const audioPlayer = document.getElementById('audio-player');
+    const audioElement = document.getElementById('audio-element');
+    const audioTitle = document.getElementById('audio-player-title');
+    const audioArtist = document.getElementById('audio-player-artist');
+
+    // 显示播放器
+    audioPlayer.style.display = 'flex';
+
+    // 获取当前文件夹的所有音频文件
+    const currentDir = path.substring(0, path.lastIndexOf('/')) || '/';
+    loadFolderAudioFiles(currentDir, path);
+
+    // 设置音频源和标题
+    audioElement.src = url;
+    audioTitle.textContent = name;
+
+    // 尝试从文件名中提取歌手信息
+    const artistMatch = name.match(/^(.+?)\s*[-–]\s*.+$/);
+    if (artistMatch) {
+        audioArtist.textContent = artistMatch[1];
+    } else {
+        audioArtist.textContent = '未知艺术家';
+    }
+
+    // 播放音频
+    audioElement.play().catch(err => {
+        console.error('播放失败:', err);
+        showToast('音频播放失败，请检查文件格式', 'error');
+    });
+}
+
+// 加载当前文件夹的音频文件到播放列表
+function loadFolderAudioFiles(dirPath, currentPath) {
+    // 清空播放列表
+    audioPlaylist = [];
+
+    // 使用currentAllFiles获取当前文件夹的所有音频文件
+    if (currentAllFiles && currentAllFiles.length > 0) {
+        currentAllFiles.forEach(file => {
+            if (!file.isDir) {
+                const fileExt = file.name.split('.').pop().toLowerCase();
+
+                // 检查是否是音频文件
+                if (audioExts.includes(fileExt)) {
+                    // 构建预览URL
+                    const previewUrl = `${API_BASE}/api/preview?path=${encodeURIComponent(file.path)}` + 
+                                     (authToken ? '&token=' + encodeURIComponent(authToken) : '');
+
+                    audioPlaylist.push({
+                        path: file.path,
+                        name: file.name,
+                        url: previewUrl
+                    });
+                }
+            }
+        });
+    }
+
+    // 找到当前播放的音频索引
+    currentAudioIndex = audioPlaylist.findIndex(item => item.path === currentPath);
+}
+
+// 关闭音频播放器
+function closeAudioPlayer() {
+    const audioPlayer = document.getElementById('audio-player');
+    const audioElement = document.getElementById('audio-element');
+
+    // 停止播放
+    audioElement.pause();
+    audioElement.src = '';
+
+    // 隐藏播放器
+    audioPlayer.style.display = 'none';
+
+    // 清空播放列表
+    audioPlaylist = [];
+    currentAudioIndex = -1;
+}
+
+// 初始化音频播放器事件
+function initAudioPlayer() {
+    const audioElement = document.getElementById('audio-element');
+    const closeBtn = document.getElementById('audio-player-close');
+    const playlistBtn = document.getElementById('audio-player-playlist');
+    const modeBtn = document.getElementById('audio-player-mode');
+    const playBtn = document.getElementById('audio-player-play');
+    const prevBtn = document.getElementById('audio-player-prev');
+    const nextBtn = document.getElementById('audio-player-next');
+    const volumeBtn = document.getElementById('audio-player-volume');
+    const volumeInput = document.getElementById('audio-volume-input');
+    const progressInput = document.getElementById('audio-progress-input');
+
+    // 关闭按钮事件
+    closeBtn.addEventListener('click', closeAudioPlayer);
+
+    // 播放列表按钮事件
+    playlistBtn.addEventListener('click', function() {
+        const dropdown = document.getElementById('audio-player-dropdown');
+        dropdown.classList.toggle('show');
+        if (dropdown.classList.contains('show')) {
+            updatePlaylistDropdown();
+        }
+    });
+
+    // 关闭下拉菜单按钮事件
+    document.getElementById('audio-player-dropdown-close').addEventListener('click', function() {
+        document.getElementById('audio-player-dropdown').classList.remove('show');
+    });
+
+    // 点击下拉菜单外部关闭
+    document.addEventListener('click', function(e) {
+        const dropdown = document.getElementById('audio-player-dropdown');
+        const playlistBtn = document.getElementById('audio-player-playlist');
+        if (!dropdown.contains(e.target) && !playlistBtn.contains(e.target)) {
+            dropdown.classList.remove('show');
+        }
+    });
+
+    // 关闭下拉菜单按钮事件
+    document.getElementById('audio-player-dropdown-close').addEventListener('click', function() {
+        document.getElementById('audio-player-dropdown').classList.remove('show');
+    });
+
+    // 点击下拉菜单外部关闭
+    document.addEventListener('click', function(e) {
+        const dropdown = document.getElementById('audio-player-dropdown');
+        const playlistBtn = document.getElementById('audio-player-playlist');
+        if (!dropdown.contains(e.target) && !playlistBtn.contains(e.target)) {
+            dropdown.classList.remove('show');
+        }
+    });
+
+    // 播放模式按钮事件
+    modeBtn.addEventListener('click', togglePlayMode);
+
+    // 播放/暂停按钮事件
+    playBtn.addEventListener('click', togglePlayPause);
+
+    // 上一首按钮事件
+    prevBtn.addEventListener('click', playPrevAudio);
+
+    // 下一首按钮事件
+    nextBtn.addEventListener('click', playNextAudio);
+
+    // 音量按钮事件
+    volumeBtn.addEventListener('click', toggleMute);
+
+    // 音量滑块事件
+    volumeInput.addEventListener('input', function() {
+        audioElement.volume = this.value / 100;
+        updateVolumeIcon(audioElement.volume);
+    });
+
+    // 进度条事件
+    progressInput.addEventListener('input', function() {
+        const time = (this.value / 100) * audioElement.duration;
+        audioElement.currentTime = time;
+    });
+
+    // 音频时间更新事件
+    audioElement.addEventListener('timeupdate', updateProgress);
+
+    // 音频加载完成事件
+    audioElement.addEventListener('loadedmetadata', function() {
+        document.getElementById('audio-total-time').textContent = formatTime(audioElement.duration);
+    });
+
+    // 音频播放结束事件
+    audioElement.addEventListener('ended', function() {
+        playNextAudio();
+    });
+
+    // 音频播放状态变化事件
+    audioElement.addEventListener('play', function() {
+        playBtn.querySelector('i').className = 'fas fa-pause';
+    });
+
+    audioElement.addEventListener('pause', function() {
+        playBtn.querySelector('i').className = 'fas fa-play';
+    });
+}
+
+// 格式化时间
+function formatTime(seconds) {
+    if (isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+// 更新进度条
+function updateProgress() {
+    const audioElement = document.getElementById('audio-element');
+    const progressInput = document.getElementById('audio-progress-input');
+    const progressFilled = document.getElementById('audio-progress-filled');
+    const currentTimeEl = document.getElementById('audio-current-time');
+
+    if (audioElement.duration) {
+        const progress = (audioElement.currentTime / audioElement.duration) * 100;
+        progressInput.value = progress;
+        progressFilled.style.width = progress + '%';
+        currentTimeEl.textContent = formatTime(audioElement.currentTime);
+    }
+}
+
+// 切换播放/暂停
+function togglePlayPause() {
+    const audioElement = document.getElementById('audio-element');
+    if (audioElement.paused) {
+        audioElement.play();
+    } else {
+        audioElement.pause();
+    }
+}
+
+// 播放上一首
+function playPrevAudio() {
+    if (audioPlaylist.length === 0) return;
+
+    let prevIndex;
+
+    switch(audioPlayMode) {
+        case 'random':
+            // 随机选择一个不等于当前索引的索引
+            do {
+                prevIndex = Math.floor(Math.random() * audioPlaylist.length);
+            } while (prevIndex === currentAudioIndex && audioPlaylist.length > 1);
+            break;
+        case 'loop':
+            // 循环播放当前歌曲
+            prevIndex = currentAudioIndex;
+            break;
+        case 'sequential':
+        default:
+            // 顺序播放上一首
+            prevIndex = (currentAudioIndex - 1 + audioPlaylist.length) % audioPlaylist.length;
+            break;
+    }
+
+    const prevAudio = audioPlaylist[prevIndex];
+    playAudio(prevAudio.url, prevAudio.name, prevAudio.path);
+}
+
+// 更新音量图标
+function updateVolumeIcon(volume) {
+    const volumeBtn = document.getElementById('audio-player-volume');
+    const icon = volumeBtn.querySelector('i');
+
+    if (volume === 0) {
+        icon.className = 'fas fa-volume-mute';
+    } else if (volume < 0.5) {
+        icon.className = 'fas fa-volume-down';
+    } else {
+        icon.className = 'fas fa-volume-up';
+    }
+}
+
+// 切换静音
+function toggleMute() {
+    const audioElement = document.getElementById('audio-element');
+    const volumeInput = document.getElementById('audio-volume-input');
+
+    if (audioElement.volume > 0) {
+        audioElement.dataset.prevVolume = audioElement.volume;
+        audioElement.volume = 0;
+        volumeInput.value = 0;
+    } else {
+        const prevVolume = parseFloat(audioElement.dataset.prevVolume) || 1;
+        audioElement.volume = prevVolume;
+        volumeInput.value = prevVolume * 100;
+    }
+
+    updateVolumeIcon(audioElement.volume);
+}
+
+// 切换播放模式
+function togglePlayMode() {
+    const modeBtn = document.getElementById('audio-player-mode');
+    const modes = ['sequential', 'random', 'loop'];
+    const currentIndex = modes.indexOf(audioPlayMode);
+    const nextIndex = (currentIndex + 1) % modes.length;
+    audioPlayMode = modes[nextIndex];
+
+    // 更新按钮图标和状态
+    modeBtn.dataset.mode = audioPlayMode;
+    modeBtn.classList.add('active');
+
+    // 更新图标
+    const icon = modeBtn.querySelector('i');
+    switch(audioPlayMode) {
+        case 'sequential':
+            icon.className = 'fas fa-retweet';
+            showToast('顺序播放', 'info');
+            break;
+        case 'random':
+            icon.className = 'fas fa-random';
+            showToast('随机播放', 'info');
+            break;
+        case 'loop':
+            icon.className = 'fas fa-redo';
+            showToast('循环播放', 'info');
+            break;
+    }
+}
+
+// 播放下一首
+function playNextAudio() {
+    if (audioPlaylist.length === 0) return;
+
+    let nextIndex;
+
+    switch(audioPlayMode) {
+        case 'random':
+            // 随机选择一个不等于当前索引的索引
+            do {
+                nextIndex = Math.floor(Math.random() * audioPlaylist.length);
+            } while (nextIndex === currentAudioIndex && audioPlaylist.length > 1);
+            break;
+        case 'loop':
+            // 循环播放当前歌曲
+            nextIndex = currentAudioIndex;
+            break;
+        case 'sequential':
+        default:
+            // 顺序播放下一首
+            nextIndex = (currentAudioIndex + 1) % audioPlaylist.length;
+            if (nextIndex === 0 && currentAudioIndex !== -1) {
+                // 已经播放到最后一首，停止播放
+                return;
+            }
+            break;
+    }
+
+    const nextAudio = audioPlaylist[nextIndex];
+    playAudio(nextAudio.url, nextAudio.name, nextAudio.path);
+}
+
+// 显示播放列表
+function showPlaylist() {
+    if (audioPlaylist.length === 0) {
+        showToast('播放列表为空', 'info');
+        return;
+    }
+
+    let playlistHtml = '<div style="padding: 16px; max-height: 400px; overflow-y: auto;">';
+    playlistHtml += '<h3 style="margin: 0 0 16px 0; font-size: 16px;">播放列表</h3>';
+
+    audioPlaylist.forEach((item, index) => {
+        const isCurrent = index === currentAudioIndex;
+        playlistHtml += `
+            <div class="playlist-item ${isCurrent ? 'active' : ''}" 
+                 style="padding: 8px 12px; margin-bottom: 8px; cursor: pointer; 
+                        border-radius: 4px; background: ${isCurrent ? 'var(--primary-light)' : 'var(--bg-card)'}; 
+                        display: flex; align-items: center; gap: 8px;"
+                 onclick="playAudioFromPlaylist(${index})">
+                <i class="fas ${isCurrent ? 'fa-play' : 'fa-music'}" 
+                   style="color: ${isCurrent ? 'var(--primary)' : 'var(--text-secondary)'}; width: 16px;"></i>
+                <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; 
+                             color: ${isCurrent ? 'var(--primary)' : 'var(--text-primary)'};">${escapeHtml(item.name)}</span>
+            </div>
+        `;
+    });
+
+    playlistHtml += '</div>';
+
+    // 使用现有的模态框显示播放列表
+    const modal = document.getElementById('preview-modal');
+
+    // 如果模态框已经打开，则关闭它
+    if (modal.style.display === 'flex') {
+        closeModal('preview-modal');
+        return;
+    }
+
+    const body = document.getElementById('preview-body');
+    const title = document.getElementById('preview-title');
+
+    title.textContent = '播放列表';
+    body.innerHTML = playlistHtml;
+    openModal('preview-modal');
+}
+
+// 更新播放列表下拉菜单
+function updatePlaylistDropdown() {
+    const dropdownBody = document.getElementById('audio-player-dropdown-body');
+
+    if (audioPlaylist.length === 0) {
+        dropdownBody.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">播放列表为空</div>';
+        return;
+    }
+
+    let html = '';
+    audioPlaylist.forEach((item, index) => {
+        const isCurrent = index === currentAudioIndex;
+        html += `
+            <div class="audio-player-dropdown-item ${isCurrent ? 'active' : ''}" onclick="playAudioFromPlaylist(${index})">
+                <div class="audio-player-dropdown-item-icon">
+                    <i class="fas ${isCurrent ? 'fa-play' : 'fa-music'}"></i>
+                </div>
+                <div class="audio-player-dropdown-item-name">${escapeHtml(item.name)}</div>
+            </div>
+        `;
+    });
+
+    dropdownBody.innerHTML = html;
+}
+
+// 从播放列表播放
+function playAudioFromPlaylist(index) {
+    const item = audioPlaylist[index];
+    if (item) {
+        playAudio(item.url, item.name, item.path);
+        closeModal('preview-modal');
+        document.getElementById('audio-player-dropdown').classList.remove('show');
+    }
+}
+
 // ===== 文件预览 =====
 function previewFile(path, name) {
     const ext = name.split(".").pop().toLowerCase();
@@ -2031,7 +2473,6 @@ function previewFile(path, name) {
     const imageExts = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "svg", "ico", "tiff", "tif", "avif"];
     const videoExts = ["mp4", "webm", "ogg", "mov", "avi", "mkv"];
     const videoPreviewExts = ["mp4", "webm", "ogg"];
-    const audioExts = ["mp3", "wav", "flac", "aac", "ogg", "m4a", "wma"];
     const pdfExts = ["pdf"];
     const officeExts = ["doc", "docx", "xls", "xlsx", "ppt", "pptx"];
     const markdownExts = ["md", "markdown"];
@@ -2180,11 +2621,9 @@ function previewFile(path, name) {
             body.appendChild(unsupportedDiv);
         }
     } else if (audioExts.includes(ext)) {
-        const audio = document.createElement("audio");
-        // 通过URL附加token参数解决audio标签无法携带Authorization header的问题
-        audio.src = authToken ? previewUrl + '&token=' + encodeURIComponent(authToken) : previewUrl;
-        audio.controls = true;
-        body.appendChild(audio);
+        // 使用独立的音频播放器
+        playAudio(previewUrl, name, path);
+        return;
     } else if (pdfExts.includes(ext)) {
         const iframe = document.createElement("iframe");
         // 通过URL附加token参数解决iframe无法携带Authorization header的问题
@@ -3231,6 +3670,10 @@ function applyDefaultSettings() {
         gridBtn.classList.toggle('active', defaultView === 'grid');
         listBtn.classList.toggle('active', defaultView === 'list');
     }
+
+    // 应用播放列表位置
+    const playlistPosition = localStorage.getItem('playlistPosition') || 'left';
+    applyPlaylistPosition(playlistPosition);
 }
 
 
@@ -3323,6 +3766,8 @@ document.addEventListener("DOMContentLoaded", async function() {
     applyDefaultSettings();
     // 初始化用户菜单（优先绑定登录按钮，避免后续错误导致登录不可用）
     initUserMenu();
+    // 初始化音频播放器
+    initAudioPlayer();
     // 检查登录状态
     await checkLoginStatus();
     // 加载文件
@@ -4167,6 +4612,7 @@ function initSettingsDropdowns() {
         { id: 'settings-default-sort', onChange: function(value) { localStorage.setItem('defaultSort', value); sortField = value; renderFiles(sortFiles(currentAllFiles)); } },
         { id: 'settings-upload-conflict', onChange: function(value) { localStorage.setItem('uploadConflict', value); } },
         { id: 'settings-auto-lock', onChange: function(value) { localStorage.setItem('autoLock', value); resetAutoLockTimer(); } },
+        { id: 'settings-playlist-position', onChange: function(value) { localStorage.setItem('playlistPosition', value); applyPlaylistPosition(value); } },
         { id: 'user-edit-type', onChange: function(value) {} }
     ];
 
@@ -4238,16 +4684,21 @@ function loadSettings() {
     const uploadConflict = localStorage.getItem('uploadConflict') || 'rename';
     const autoLock = localStorage.getItem('autoLock') || '0';
     const defaultView = localStorage.getItem('defaultView') || 'grid';
+    const playlistPosition = localStorage.getItem('playlistPosition') || 'left';
 
     if (settingsDropdowns['settings-default-sort']) settingsDropdowns['settings-default-sort'].value = defaultSort;
     document.getElementById('settings-show-hidden').checked = showHidden;
     if (settingsDropdowns['settings-upload-conflict']) settingsDropdowns['settings-upload-conflict'].value = uploadConflict;
     if (settingsDropdowns['settings-auto-lock']) settingsDropdowns['settings-auto-lock'].value = autoLock;
+    if (settingsDropdowns['settings-playlist-position']) settingsDropdowns['settings-playlist-position'].value = playlistPosition;
 
     // 更新视图切换按钮
     document.querySelectorAll('.settings-toggle-btn').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-view') === defaultView);
     });
+
+    // 应用播放列表位置
+    applyPlaylistPosition(playlistPosition);
 }
 
 // 保存设置
@@ -4256,5 +4707,14 @@ function saveSettings() {
     localStorage.setItem('showHidden', document.getElementById('settings-show-hidden').checked);
     localStorage.setItem('uploadConflict', settingsDropdowns['settings-upload-conflict'] ? settingsDropdowns['settings-upload-conflict'].value : 'rename');
     localStorage.setItem('autoLock', settingsDropdowns['settings-auto-lock'] ? settingsDropdowns['settings-auto-lock'].value : '0');
+    localStorage.setItem('playlistPosition', settingsDropdowns['settings-playlist-position'] ? settingsDropdowns['settings-playlist-position'].value : 'left');
     showToast('设置已保存', 'success');
+}
+
+// 应用播放列表位置
+function applyPlaylistPosition(position) {
+    const dropdown = document.getElementById('audio-player-dropdown');
+    if (dropdown) {
+        dropdown.setAttribute('data-position', position);
+    }
 }
