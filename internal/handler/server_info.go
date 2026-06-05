@@ -9,7 +9,7 @@ import (
 	"nano/internal/service"
 )
 
-// handleServerInfo 返回服务器信息，包括IPv4地址、IPv6地址和端口
+// handleServerInfo 返回服务器信息，包括IPv4地址和端口
 func handleServerInfo(w http.ResponseWriter, r *http.Request) {
 	// 获取服务器监听端口
 	port := config.C.Port
@@ -44,13 +44,13 @@ func handleServerInfo(w http.ResponseWriter, r *http.Request) {
 				case *net.IPAddr:
 					ip = v.IP
 				}
-				// 收集IPv4地址，跳过回环地址
-				if ip != nil && ip.To4() != nil && !ip.IsLoopback() {
-					ipv4s = append(ipv4s, ip.String())
-				}
-				// 收集IPv6地址，跳过回环地址和链路本地地址
-				if ip != nil && ip.To4() == nil && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() {
-					ipv6s = append(ipv6s, "["+ip.String()+"]")
+				// 收集IPv4和IPv6地址，跳过回环地址
+				if ip != nil && !ip.IsLoopback() {
+					if ip.To4() != nil {
+						ipv4s = append(ipv4s, ip.String())
+					} else if ip.To16() != nil {
+						ipv6s = append(ipv6s, "["+ip.String()+"]")
+					}
 				}
 			}
 		}
@@ -70,13 +70,13 @@ func handleServerInfo(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 如果没有找到任何IPv6地址，使用空字符串
+	// 如果没有找到IPv6地址，使用空字符串
 	var ipv6 string
 	if len(ipv6s) > 0 {
 		ipv6 = ipv6s[0]
 	}
 
-	// 返回IPv4地址、IPv6地址和服务器端口
+	// 返回IPv4、IPv6地址和服务器端口
 	respondWithSuccess(w, map[string]any{
 		"ipv4": ipv4,
 		"ipv6": ipv6,

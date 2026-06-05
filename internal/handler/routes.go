@@ -59,9 +59,9 @@ var routes = []routeDef{
 
 	// ── 文件传输（认证） ──────────────────────────────────
 	{"/api/upload", handleUpload, []string{http.MethodPost}, levelAuth},
-	{"/api/download", handleDownload, nil, levelPublic},
-	{"/api/batch-download", handleBatchDownload, nil, levelPublic},
-	{"/api/d", handleDownloadPage, []string{http.MethodGet}, levelPublic},
+	{"/api/download", handleDownload, nil, levelAuth},
+	{"/api/batch-download", handleBatchDownload, nil, levelAuth},
+	{"/api/d", handleDownloadPage, []string{http.MethodGet}, levelAuth},
 	{"/api/preview", handlePreview, []string{http.MethodGet}, levelAuth},
 	{"/api/storage", handleStorage, []string{http.MethodGet}, levelAuth},
 

@@ -29,8 +29,11 @@
                     </button>
                     <div class="topbar-qrcode-popup" id="topbar-qrcode-popup">
                         <div class="topbar-qrcode-title"><i class="fas fa-qrcode"></i><span>扫码访问</span></div>
+                        <div class="topbar-qrcode-address-selector">
+                            <button class="address-selector-btn active" data-type="ipv4">IPv4</button>
+                            <button class="address-selector-btn" data-type="ipv6">IPv6</button>
+                        </div>
                         <div id="topbar-qrcode-body" class="topbar-qrcode-body"></div>
-                        <div class="topbar-qrcode-tip">局域网扫描码打开网站</div>
                     </div>
                 </div>
                 <button class="topbar-theme-btn" id="topbar-theme-btn" title="切换主题">
@@ -653,25 +656,27 @@
                             </label>
                         </div>
                     </div>
-                    <!-- 服务器地址 -->
+                    <!-- 服务器地址设置 -->
                     <div class="settings-section">
                         <h6 class="settings-section-title">服务器地址</h6>
                         <div class="settings-item">
                             <div class="settings-item-label">
                                 <i class="fas fa-network-wired"></i>
-                                <span>手机扫码时使用的地址</span>
+                                <span>IPv4地址</span>
                             </div>
-                            <div class="server-address-options">
-                                <label class="server-address-option">
-                                    <input type="radio" name="server-address" value="ipv4" id="server-address-ipv4">
-                                    <span>IPv4</span>
-                                    <span id="server-ipv4-display" class="server-address-display"></span>
-                                </label>
-                                <label class="server-address-option">
-                                    <input type="radio" name="server-address" value="ipv6" id="server-address-ipv6">
-                                    <span>IPv6</span>
-                                    <span id="server-ipv6-display" class="server-address-display"></span>
-                                </label>
+                            <div class="settings-input-group">
+                                <input type="radio" name="address-type" value="ipv4" id="address-ipv4" checked>
+                                <input type="text" id="settings-ipv4-address" class="settings-input" readonly>
+                            </div>
+                        </div>
+                        <div class="settings-item">
+                            <div class="settings-item-label">
+                                <i class="fas fa-network-wired"></i>
+                                <span>IPv6地址</span>
+                            </div>
+                            <div class="settings-input-group">
+                                <input type="radio" name="address-type" value="ipv6" id="address-ipv6">
+                                <input type="text" id="settings-ipv6-address" class="settings-input" readonly>
                             </div>
                         </div>
                     </div>

@@ -230,6 +230,12 @@ func handleDownloadPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 将token参数传递给下载链接
+	token := r.URL.Query().Get("token")
+	if token != "" {
+		downloadURL += "&token=" + url.QueryEscape(token)
+	}
+
 	// 重定向到前端下载页面，通过 URL 参数传递文件名和下载链接
 	redirectURL := "/download.html?name=" + url.QueryEscape(fileName) + "&url=" + url.QueryEscape(downloadURL)
 	http.Redirect(w, r, redirectURL, http.StatusFound)

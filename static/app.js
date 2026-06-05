@@ -3349,13 +3349,34 @@ function setupEventListeners() {
 
         function getDownloadUrl() {
             if (selectedFiles.length === 0) return '';
+            var baseUrl = window.location.origin;
+
+            // 根据选择的地址类型替换URL中的主机地址
+            var selectedAddressType = localStorage.getItem('selectedAddressType') || 'ipv4';
+            if (serverInfoCache) {
+                if (selectedAddressType === 'ipv4' && serverInfoCache.ipv4) {
+                    baseUrl = baseUrl.replace(/\/\/([^\/:]+)(:\d+)?/, "//" + serverInfoCache.ipv4 + "$2");
+                } else if (selectedAddressType === 'ipv6' && serverInfoCache.ipv6) {
+                    var ipv6Addr = serverInfoCache.ipv6.replace(/[\[\]]/g, '');
+                    baseUrl = baseUrl.replace(/\/\/([^\/:]+)(:\d+)?/, "//[" + ipv6Addr + "]$2");
+                }
+            }
+
+            var url;
             if (selectedFiles.length === 1) {
                 // 单文件/目录：使用下载页面
-               return getLanUrl(window.location.origin) + '/api/d?path=' + encodeURIComponent(selectedFiles[0].path);
+                url = baseUrl + '/api/d?path=' + encodeURIComponent(selectedFiles[0].path);
+            } else {
+                // 多文件：使用下载页面（逗号分隔paths）
+                var pathsParam = selectedFiles.map(function(f){ return f.path; }).join(',');
+                url = baseUrl + '/api/d?paths=' + encodeURIComponent(pathsParam);
             }
-            // 多文件：使用下载页面（逗号分隔paths）
-            var pathsParam = selectedFiles.map(function(f){ return f.path; }).join(',');
-           return getLanUrl(window.location.origin) + '/api/d?paths=' + encodeURIComponent(pathsParam);
+
+            // 附带token参数
+            if (authToken) {
+                url += '&token=' + encodeURIComponent(authToken);
+            }
+            return url;
         }
 
         function showQrPopup(btn) {
@@ -3874,132 +3895,68 @@ async function fetchServerInfo() {
         if (response.ok) {
             const data = await response.json();
             serverInfoCache = data.data;
-            console.log('Server info loaded:', serverInfoCache);
-            // 更新服务器地址显示
-            updateServerAddressDisplay();
+
+            // 更新设置页面的地址显示
+            const ipv4Input = document.getElementById('settings-ipv4-address');
+            const ipv6Input = document.getElementById('settings-ipv6-address');
+            const ipv4Radio = document.getElementById('address-ipv4');
+            const ipv6Radio = document.getElementById('address-ipv6');
+
+            if (ipv4Input && serverInfoCache.ipv4) {
+                ipv4Input.value = serverInfoCache.ipv4;
+            }
+            if (ipv6Input && serverInfoCache.ipv6) {
+                ipv6Input.value = serverInfoCache.ipv6;
+            }
+
+            // 初始化单选按钮状态
+            const selectedType = localStorage.getItem('selectedAddressType') || 'ipv4';
+            if (ipv4Radio && ipv6Radio) {
+                ipv4Radio.checked = selectedType === 'ipv4';
+                ipv6Radio.checked = selectedType === 'ipv6';
+
+                // 添加单选按钮点击事件
+                ipv4Radio.addEventListener('change', function() {
+                    if (this.checked) {
+                        localStorage.setItem('selectedAddressType', 'ipv4');
+                        // 更新二维码弹出框的按钮状态
+                        const addressButtons = document.querySelectorAll('.address-selector-btn');
+                        addressButtons.forEach(btn => {
+                            btn.classList.toggle('active', btn.dataset.type === 'ipv4');
+                        });
+                    }
+                });
+
+                ipv6Radio.addEventListener('change', function() {
+                    if (this.checked) {
+                        localStorage.setItem('selectedAddressType', 'ipv6');
+                        // 更新二维码弹出框的按钮状态
+                        const addressButtons = document.querySelectorAll('.address-selector-btn');
+                        addressButtons.forEach(btn => {
+                            btn.classList.toggle('active', btn.dataset.type === 'ipv6');
+                        });
+                    }
+                });
+            }
         }
     } catch (error) {
         console.error('Failed to fetch server info:', error);
     }
 }
 
-// 更新服务器地址显示
-function updateServerAddressDisplay() {
-    if (!serverInfoCache) return;
-    
-    const ipv4Display = document.getElementById('server-ipv4-display');
-    const ipv6Display = document.getElementById('server-ipv6-display');
-    
-    if (ipv4Display && serverInfoCache.ipv4) {
-        ipv4Display.textContent = serverInfoCache.ipv4 + ':' + serverInfoCache.port;
-    }
-    
-    if (ipv6Display && serverInfoCache.ipv6) {
-        ipv6Display.textContent = serverInfoCache.ipv6 + ':' + serverInfoCache.port;
-    } else if (ipv6Display) {
-        ipv6Display.textContent = '不可用';
-        document.getElementById('server-address-ipv6').disabled = true;
-    }
-    
-    // 加载保存的服务器地址偏好
-    loadServerAddressPreference();
-}
-
-// 加载服务器地址偏好
-function loadServerAddressPreference() {
-    const preference = localStorage.getItem('serverAddressPreference');
-    if (preference) {
-        const radio = document.querySelector(`input[name="server-address"][value="${preference}"]`);
-        if (radio && !radio.disabled) {
-            radio.checked = true;
-        }
-    } else {
-        // 默认选择IPv4
-        const ipv4Radio = document.getElementById('server-address-ipv4');
-        if (ipv4Radio) {
-            ipv4Radio.checked = true;
-        }
-    }
-}
-
-// 保存服务器地址偏好
-function saveServerAddressPreference() {
-    const selected = document.querySelector('input[name="server-address"]:checked');
-    if (selected) {
-        localStorage.setItem('serverAddressPreference', selected.value);
-    }
-}
-
-// 初始化服务器地址选项
-function initServerAddressOptions() {
-    const ipv4Radio = document.getElementById('server-address-ipv4');
-    const ipv6Radio = document.getElementById('server-address-ipv6');
-    
-    // 重新生成二维码的函数
-    function regenerateQrCode() {
-        const qrBody = document.getElementById('topbar-qrcode-body');
-        if (qrBody) {
-            qrBody.innerHTML = '';
-            // 触发二维码重新生成
-            const wrapper = document.querySelector('.topbar-qrcode-wrapper');
-            if (wrapper) {
-                // 重置currentUrl，强制重新生成
-                const event = new CustomEvent('regenerate-qr');
-                wrapper.dispatchEvent(event);
-            }
-        }
-    }
-    
-    if (ipv4Radio) {
-        ipv4Radio.addEventListener('change', function() {
-            saveServerAddressPreference();
-            regenerateQrCode();
-        });
-    }
-    
-    if (ipv6Radio) {
-        ipv6Radio.addEventListener('change', function() {
-            saveServerAddressPreference();
-            regenerateQrCode();
-        });
-    }
-}
-
 // ===== 获取局域网可访问的URL（使用服务端IP信息） =====
 function getLanUrl(urlStr) {
-    if (!serverInfoCache) return urlStr;
-    
-    // 获取用户选择的服务器地址偏好
-    const preference = localStorage.getItem('serverAddressPreference') || 'ipv4';
-    let preferredIP = null;
-    
-    if (preference === 'ipv6' && serverInfoCache.ipv6) {
-        preferredIP = serverInfoCache.ipv6;
-    } else if (serverInfoCache.ipv4) {
-        preferredIP = serverInfoCache.ipv4;
-    }
-
-
-    
-    if (!preferredIP) return urlStr;
-
+    if (!serverInfoCache || !serverInfoCache.preferredIP) return urlStr;
     try {
         var url = new URL(urlStr);
-        // 替换hostname为用户选择的服务器地址
-        // 如果是IPv6地址，需要去掉方括号
-        const hostname = preferredIP.startsWith('[') ? preferredIP.slice(1, -1) : preferredIP;
-        // IPv6地址需要用方括号包围
-        const host = preferredIP.startsWith('[') ? preferredIP : `[${hostname}]`;
-        // 设置host属性，包含端口号
-        url.host = url.port ? host + ':' + url.port : host;
+        if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+            url.hostname = serverInfoCache.preferredIP;
+        }
         return url.toString();
     } catch(e) {
-        // 如果URL解析失败，尝试直接替换
-        const hostnameMatch = urlStr.match(/\/\/([^\/]+)/);
-        if (hostnameMatch) {
-            // IPv6地址需要用方括号包围
-            const replacement = preferredIP.startsWith('[') ? preferredIP : `[${preferredIP}]`;
-            urlStr = urlStr.replace(hostnameMatch[0], "//" + replacement);
+        if (serverInfoCache && serverInfoCache.preferredIP) {
+            urlStr = urlStr.replace("//localhost", "//" + serverInfoCache.preferredIP);
+            urlStr = urlStr.replace("//127.0.0.1", "//" + serverInfoCache.preferredIP);
         }
         return urlStr;
     }
@@ -4013,6 +3970,33 @@ function initTopbarQrCode() {
 
     let qrInstance = null;
     let currentUrl = '';
+    let selectedAddressType = localStorage.getItem('selectedAddressType') || 'ipv4';
+
+    // 初始化地址选择按钮
+    const addressButtons = wrapper.querySelectorAll('.address-selector-btn');
+    addressButtons.forEach(btn => {
+        if (btn.dataset.type === selectedAddressType) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+        btn.addEventListener('click', function() {
+            addressButtons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            selectedAddressType = this.dataset.type;
+            localStorage.setItem('selectedAddressType', selectedAddressType);
+
+            // 同步设置页面的单选按钮状态
+            const ipv4Radio = document.getElementById('address-ipv4');
+            const ipv6Radio = document.getElementById('address-ipv6');
+            if (ipv4Radio && ipv6Radio) {
+                ipv4Radio.checked = selectedAddressType === 'ipv4';
+                ipv6Radio.checked = selectedAddressType === 'ipv6';
+            }
+
+            generateQr();
+        });
+    });
 
     function getQrUrl() {
         // 获取当前页面的完整URL
@@ -4023,7 +4007,19 @@ function initTopbarQrCode() {
         
         // 移除URL末尾的?或&（如果有）
         url = url.replace(/[?&]$/, '');
-        url = getLanUrl(url);
+
+        // 根据选择的地址类型生成URL
+        if (serverInfoCache) {
+            // 使用字符串替换方式替换URL中的主机地址
+            if (selectedAddressType === 'ipv4' && serverInfoCache.ipv4) {
+                // 替换 //hostname:port 或 //hostname 为 //ipv4:port 或 //ipv4
+                url = url.replace(/\/\/([^\/:]+)(:\d+)?/, "//" + serverInfoCache.ipv4 + "$2");
+            } else if (selectedAddressType === 'ipv6' && serverInfoCache.ipv6) {
+                const ipv6Addr = serverInfoCache.ipv6.replace(/[\[\]]/g, '');
+                // 替换 //hostname:port 或 //hostname 为 //[ipv6]:port 或 //[ipv6]
+                url = url.replace(/\/\/([^\/:]+)(:\d+)?/, "//[" + ipv6Addr + "]$2");
+            }
+        }
         
         // 如果已登录，附带token参数
         if (authToken) {
@@ -4052,12 +4048,6 @@ function initTopbarQrCode() {
     wrapper.addEventListener('mouseenter', function() {
         generateQr();
     });
-    
-    // 添加regenerate-qr事件监听，用于强制重新生成二维码
-    wrapper.addEventListener('regenerate-qr', function() {
-        currentUrl = ''; // 重置currentUrl，强制重新生成
-        generateQr();
-    });
 }
 
 // ===== 初始化 =====
@@ -4084,8 +4074,6 @@ document.addEventListener("DOMContentLoaded", async function() {
     await fetchServerInfo();
     // 初始化顶部二维码
     initTopbarQrCode();
-    // 初始化服务器地址选项
-    initServerAddressOptions();
     // 启动自动锁定计时器
     resetAutoLockTimer();
 });
