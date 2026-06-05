@@ -6,14 +6,15 @@
 //
 // 典型用法：
 //
-//   logger.Init(logDir, level, maxSize, maxBackup, maxAge)
-//   logger.Info(ip, "上传", path, filename)
-//   logger.Error(ip, "删除", path, filename, err)
-//   logger.Stop()  // 优雅关闭
+//	logger.Init(logDir, level, maxSize, maxBackup, maxAge)
+//	logger.Info(ip, "上传", path, filename)
+//	logger.Error(ip, "删除", path, filename, err)
+//	logger.Stop()  // 优雅关闭
 package logger
 
 import (
 	"fmt"
+	"nano/internal/config"
 	"os"
 	"path/filepath"
 	"sync"
@@ -29,19 +30,23 @@ var levelWeight = map[string]int{
 }
 
 var (
-	file      *os.File     // 当前日志文件句柄
-	mu        sync.Mutex   // 日志写入互斥锁
-	curLevel  int          // 当前日志级别权重
-	maxSize   int64        // 单个日志文件最大字节数
-	maxBackup int          // 保留的备份数量
-	maxAge    int          // 保留天数
-	logDir    string       // 日志目录
-	logPath   string       // 当前日志文件路径
+	file      *os.File      // 当前日志文件句柄
+	mu        sync.Mutex    // 日志写入互斥锁
+	curLevel  int           // 当前日志级别权重
+	maxSize   int64         // 单个日志文件最大字节数
+	maxBackup int           // 保留的备份数量
+	maxAge    int           // 保留天数
+	logDir    string        // 日志目录
+	logPath   string        // 当前日志文件路径
 	done      chan struct{} // 用于停止日志轮转 goroutine
 )
 
+func Init(config *config.Config) error {
+	return initLogger(config.LogDir, config.LogLevel, config.LogMaxSizeBytes, config.LogMaxBackups, config.LogMaxAge)
+}
+
 // Init 初始化日志系统
-func Init(dir string, level string, size int64, backup int, age int) error {
+func initLogger(dir string, level string, size int64, backup int, age int) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("创建日志目录失败: %w", err)
 	}

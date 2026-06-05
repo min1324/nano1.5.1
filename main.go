@@ -80,36 +80,6 @@ import (
 	"nano/internal/service"
 )
 
-// neuteredFileSystem 禁用目录列表的文件系统包装器
-type neuteredFileSystem struct {
-	fs http.FileSystem
-}
-
-func (nfs neuteredFileSystem) Open(name string) (http.File, error) {
-	f, err := nfs.fs.Open(name)
-	if err != nil {
-		return nil, err
-	}
-	stat, err := f.Stat()
-	if err != nil {
-		f.Close()
-		return nil, err
-	}
-	if stat.IsDir() {
-		return noDirListingFile{f}, nil
-	}
-	return f, nil
-}
-
-// noDirListingFile 包装 http.File，禁止目录列表（Readdir 返回空）
-type noDirListingFile struct {
-	http.File
-}
-
-func (f noDirListingFile) Readdir(count int) ([]os.FileInfo, error) {
-	return nil, nil
-}
-
 func main() {
 
 	// 加载配置
@@ -118,17 +88,11 @@ func main() {
 	config.InitUsers()
 
 	// 初始化日志系统
-	if err := logger.Init(
-		config.C.LogDir,
-		config.C.LogLevel,
-		config.C.LogMaxSizeBytes,
-		config.C.LogMaxBackups,
-		config.C.LogMaxAge,
-	); err != nil {
+	if err := logger.Init(config.C); err != nil {
 		fmt.Printf("初始化日志系统失败: %v\n", err)
 		os.Exit(1)
 	}
-	defer logger.Stop()
+	defer logger.Stop() // 确保在程序退出时停止日志系统
 
 	// 获取监听地址（默认为 0.0.0.0:8080）
 	address := config.GetAddress()
@@ -167,17 +131,62 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
+	logger.Info("system", "关闭", "收到关闭信号，正在优雅关闭服务...", "")
+	gracefulShutdown(srv)
+}
 
-	logger.Info("system", "关闭", "正在停止服务...", "")
-	fmt.Println("\n正在停止服务...")
+// 在main.go的Shutdown流程中添加
+func gracefulShutdown(srv *http.Server) {
+	fmt.Println("正在优雅关闭服务...")
+	// 1. 停止后台任务
+	handler.StopBackgroundTasks()
 
-	// 给予 5 秒时间完成正在处理的请求
+	fmt.Println("正在等待正在处理的请求...")
+	// 2. 给予5秒时间完成正在处理的请求
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	fmt.Println("正在关闭HTTP服务器...")
+	// 3. 关闭HTTP服务器
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("服务强制关闭: %v\n", err)
 	}
 
-	fmt.Println("服务已停止")
+	fmt.Println("HTTP服务器已关闭")
+	// 4. 停止日志系统
+	logger.Stop()
+
+	fmt.Println("日志系统已停止")
+	// 5. 清理文件操作锁（可选）
+	service.FM.CleanupLocks()
+}
+
+// neuteredFileSystem 禁用目录列表的文件系统包装器
+type neuteredFileSystem struct {
+	fs http.FileSystem
+}
+
+func (nfs neuteredFileSystem) Open(name string) (http.File, error) {
+	f, err := nfs.fs.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	stat, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	if stat.IsDir() {
+		return noDirListingFile{f}, nil
+	}
+	return f, nil
+}
+
+// noDirListingFile 包装 http.File，禁止目录列表（Readdir 返回空）
+type noDirListingFile struct {
+	http.File
+}
+
+func (f noDirListingFile) Readdir(count int) ([]os.FileInfo, error) {
+	return nil, nil
 }

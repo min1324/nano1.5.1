@@ -20,9 +20,29 @@ import (
 // value: 重命名后的文件夹名
 var (
 	globalRenameMap      = make(map[string]string) // 重命名映射表
-	renameMapMutex       sync.RWMutex               // 读写锁，保护映射表的并发访问
-	renameMapLastUpdated time.Time                  // 最后更新时间，用于判断是否需要清理
+	renameMapMutex       sync.RWMutex              // 读写锁，保护映射表的并发访问
+	renameMapLastUpdated time.Time                 // 最后更新时间，用于判断是否需要清理
+	shutdownChan         = make(chan struct{})     // 添加关闭通道
 )
+
+// init 初始化时启动清理任务
+//
+// 每小时执行一次清理操作，防止内存泄漏
+func init() {
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				cleanupExpiredRenameMaps()
+			case <-shutdownChan:
+				return // 优雅退出
+			}
+		}
+	}()
+}
 
 // cleanupExpiredRenameMaps 清理过期的重命名映射（超过1小时未使用）
 //
@@ -38,16 +58,9 @@ func cleanupExpiredRenameMaps() {
 	}
 }
 
-// init 初始化时启动清理任务
-//
-// 每小时执行一次清理操作，防止内存泄漏
-func init() {
-	go func() {
-		for {
-			time.Sleep(time.Hour)
-			cleanupExpiredRenameMaps()
-		}
-	}()
+// 在main.go的Shutdown流程中调用
+func StopBackgroundTasks() {
+	close(shutdownChan)
 }
 
 // handleUpload 处理文件上传请求

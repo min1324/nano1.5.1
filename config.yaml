@@ -9,14 +9,14 @@ logMaxBackups: 7
 logMaxAge: 30
 users:
     - username: root
-      password: $2a$10$Yn/xIAASxCy2zGReVrxnve8K7ojKh6U3P977IcaEAp5dcp44ODTca
+      password: $2a$10$vXnTer/QpbtsIdvWBW6sa.5RGpJh7NNPkHgH3Ke7k3fdrxW.4RcXK
       type: root
       displayName: Root
     - username: admin
-      password: $2a$10$KiUQJi1a6vG8Uykv817f2.D2SEXhlF0iCT3bFyh1Cn5u9cFgwQ07.
+      password: $2a$10$9SiUsSGb7WMh6uChGCcu1eYsaqnZugBYyzKmeNu3mT/928Tj.A29m
       type: admin
       displayName: Admin
     - username: user
-      password: $2a$10$ysnNfYDtOMeeVuXTE02akuFKRpR0ZsqwHdTkY/FEYjnyEU6wA39We
+      password: $2a$10$UV0YDTSszdotyFjzS0eNG.qUUiW7UH0PNJ2Ffew/uT7m4Z14al4iC
       type: user
       displayName: User

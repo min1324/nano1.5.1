@@ -98,6 +98,14 @@ func (fm *FileManager) LockFile(path string) func() {
 	}
 }
 
+// 在main.go的Shutdown流程中调用，清理所有文件操作锁
+func (fm *FileManager) CleanupLocks() {
+	fm.fileOpLocks.Range(func(key, value any) bool {
+		fm.fileOpLocks.Delete(key)
+		return true
+	})
+}
+
 // FileOpLocksRange 遍历文件操作锁映射（用于调试和测试）
 func (fm *FileManager) FileOpLocksRange(fn func(key, value any) bool) {
 	fm.fileOpLocks.Range(fn)

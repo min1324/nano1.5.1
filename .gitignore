@@ -10,3 +10,6 @@ config.yaml
 test/
 
 test_*.txt
+
+*.sh
+*.bat
