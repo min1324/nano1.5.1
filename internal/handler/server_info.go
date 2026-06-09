@@ -1,9 +1,14 @@
 package handler
 
 import (
+	"context"
+	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"nano/internal/config"
 	"nano/internal/service"
@@ -22,66 +27,59 @@ func handleServerInfo(w http.ResponseWriter, r *http.Request) {
 		port = parts[len(parts)-1]
 	}
 
-	// 获取本机所有可用的IPv4和IPv6地址
-	var ipv4s []string
-	var ipv6s []string
-	interfaces, err := net.Interfaces()
-	if err == nil {
-		for _, iface := range interfaces {
-			// 跳过回环接口和未启用的接口
-			if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
-				continue
-			}
-			addrs, err := iface.Addrs()
-			if err != nil {
-				continue
-			}
-			for _, addr := range addrs {
-				var ip net.IP
-				switch v := addr.(type) {
-				case *net.IPNet:
-					ip = v.IP
-				case *net.IPAddr:
-					ip = v.IP
-				}
-				// 收集IPv4和IPv6地址，跳过回环地址
-				if ip != nil && !ip.IsLoopback() {
-					if ip.To4() != nil {
-						ipv4s = append(ipv4s, ip.String())
-					} else if ip.To16() != nil {
-						ipv6s = append(ipv6s, "["+ip.String()+"]")
-					}
-				}
-			}
-		}
-	}
-
-	// 如果没有找到任何IPv4地址，使用请求的Host作为备选
-	var ipv4 string
-	if len(ipv4s) > 0 {
-		ipv4 = ipv4s[0]
-	} else {
-		// 从请求的Host中提取IP
-		host := r.Host
-		if strings.Contains(host, ":") {
-			ipv4 = strings.Split(host, ":")[0]
-		} else {
-			ipv4 = host
-		}
-	}
-
-	// 如果没有找到IPv6地址，使用空字符串
-	var ipv6 string
-	if len(ipv6s) > 0 {
-		ipv6 = ipv6s[0]
+	// 获取公网 IPv6 地址
+	ipv6, err := getPublicIPv6()
+	if err != nil {
+		log.Printf("获取公网IPv6地址失败: %v", err)
+		ipv6 = config.C.LocalIP.IPv6
 	}
 
 	// 返回IPv4、IPv6地址和服务器端口
 	respondWithSuccess(w, map[string]any{
-		"ipv4": ipv4,
+		"ipv4": config.C.LocalIP.IPv4,
 		"ipv6": ipv6,
 		"port": port,
 	})
+}
+
+// getPublicIPv6 获取公网 IPv6 地址
+func getPublicIPv6() (string, error) {
+	// 创建强制使用IPv6的HTTP客户端
+	dialer := &net.Dialer{
+		Timeout: 10 * time.Second,
+	}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			// 强制使用tcp6，只连接IPv6地址
+			return dialer.DialContext(ctx, "tcp6", addr)
+		},
+	}
+	client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
+
+	// 主用
+	resp, err := client.Get("https://api6.ipify.org")
+	if err == nil {
+		defer resp.Body.Close()
+		data, _ := io.ReadAll(resp.Body)
+		ip := strings.TrimSpace(string(data))
+		// 验证是IPv6地址
+		if parsed := net.ParseIP(ip); parsed != nil && parsed.To4() == nil {
+			return ip, nil
+		}
+		log.Printf("api6.ipify.org返回非IPv6地址: %s, 尝试备用服务", ip)
+	}
+	// 备用
+	resp2, err2 := client.Get("https://ipv6.icanhazip.com")
+	if err2 == nil {
+		defer resp2.Body.Close()
+		data, _ := io.ReadAll(resp2.Body)
+		ip := strings.TrimSpace(string(data))
+		if parsed := net.ParseIP(ip); parsed != nil && parsed.To4() == nil {
+			return ip, nil
+		}
+		log.Printf("ipv6.icanhazip.com返回非IPv6地址: %s", ip)
+	}
+	return "", fmt.Errorf("all IPv6 services failed")
 }
 
 // handleStorage 返回存储空间使用情况

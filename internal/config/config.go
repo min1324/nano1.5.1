@@ -7,6 +7,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -42,6 +43,12 @@ type Config struct {
 	LogMaxBackups       int          `yaml:"logMaxBackups"`  // 保留的日志备份数量
 	LogMaxAge           int          `yaml:"logMaxAge"`      // 日志保留天数
 	Users               []UserConfig `yaml:"users"`          // 用户列表
+	LocalIP             localIP      // 本地IP地址
+}
+
+type localIP struct {
+	IPv4 string `yaml:"ipv4"`
+	IPv6 string `yaml:"ipv6"`
 }
 
 // C 全局配置实例，由 Load() 初始化
@@ -134,6 +141,18 @@ func Load() {
 		C = def
 		return
 	}
+	// 获取本地IP地址
+	ipv4s, ipv6s, err := getLocalIP()
+	if err != nil {
+		fmt.Printf("获取本地IP地址失败: %v", err)
+		return
+	}
+	cfg.LocalIP = localIP{
+		IPv4: ipv4s[0],
+		IPv6: ipv6s[0],
+	}
+
+	// 应用默认值
 	cfg.applyDefaults(def)
 	cfg.resolveBytes()
 	fmt.Printf("Loaded config: port=%s, dir=%s, capacity=%s, preview=%s\n", cfg.Port, cfg.UploadDir, cfg.MaxStorage, cfg.PreviewMaxSize)
@@ -335,4 +354,40 @@ func GetAddress() string {
 	}
 
 	return port
+}
+
+// getLocalIp 获取本地所有IPv4和IPv6地址
+func getLocalIP() (ipv4s, ipv6s []string, err error) {
+	// 获取本机所有可用的IPv4地址
+	interfaces, err := net.Interfaces()
+	if err == nil {
+		for _, iface := range interfaces {
+			// 跳过回环接口和未启用的接口
+			if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
+				continue
+			}
+			addrs, err := iface.Addrs()
+			if err != nil {
+				continue
+			}
+			for _, addr := range addrs {
+				var ip net.IP
+				switch v := addr.(type) {
+				case *net.IPNet:
+					ip = v.IP
+				case *net.IPAddr:
+					ip = v.IP
+				}
+				// 收集IPv4和IPv6地址，跳过回环地址
+				if ip != nil && !ip.IsLoopback() {
+					if ip.To4() != nil {
+						ipv4s = append(ipv4s, ip.String())
+					} else if ip.To16() != nil {
+						ipv6s = append(ipv6s, ip.String())
+					}
+				}
+			}
+		}
+	}
+	return ipv4s, ipv6s, nil
 }
