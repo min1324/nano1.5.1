@@ -43,7 +43,7 @@ type Config struct {
 	LogMaxBackups       int          `yaml:"logMaxBackups"`  // 保留的日志备份数量
 	LogMaxAge           int          `yaml:"logMaxAge"`      // 日志保留天数
 	Users               []UserConfig `yaml:"users"`          // 用户列表
-	LocalIP             localIP      // 本地IP地址
+	LocalIP             localIP      `yaml:"localIP"`        // 本地IP地址
 }
 
 type localIP struct {
@@ -157,6 +157,9 @@ func Load() {
 	cfg.resolveBytes()
 	fmt.Printf("Loaded config: port=%s, dir=%s, capacity=%s, preview=%s\n", cfg.Port, cfg.UploadDir, cfg.MaxStorage, cfg.PreviewMaxSize)
 	C = &cfg
+
+	// 初始化用户数据结构
+	InitUsers()
 }
 
 // Save 将当前配置序列化为 YAML 并写入 config.yaml。

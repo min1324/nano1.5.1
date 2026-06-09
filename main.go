@@ -85,8 +85,6 @@ func main() {
 	// 加载配置
 	config.Load()
 
-	config.InitUsers()
-
 	// 初始化日志系统
 	if err := logger.Init(config.C); err != nil {
 		fmt.Printf("初始化日志系统失败: %v\n", err)
