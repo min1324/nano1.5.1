@@ -72,8 +72,8 @@ func defaultConfig() *Config {
 		LogMaxAge:      30,
 		Users: []UserConfig{
 			{Username: "root", Password: "123456", Type: "root", DisplayName: "Root"},
-			{Username: "admin", Password: "123456", Type: "admin", DisplayName: "Admin"},
-			{Username: "user", Password: "123456", Type: "user", DisplayName: "User"},
+			// {Username: "admin", Password: "123456", Type: "admin", DisplayName: "Admin"},
+			// {Username: "user", Password: "123456", Type: "user", DisplayName: "User"},
 		},
 	}
 }
@@ -131,6 +131,7 @@ func Load() {
 		fmt.Printf("Config file %s not found, using defaults\n", configPath)
 		def.resolveBytes()
 		C = def
+		InitUsers()
 		Save()
 		return
 	}
@@ -208,7 +209,7 @@ func parseSize(s string) int64 {
 // InitUsers 初始化运行时用户数据，将配置中的用户加载到内存。
 // 同时将明文密码自动迁移为 bcrypt 哈希，迁移后持久化到配置文件。
 func InitUsers() {
-	model.GlobalUsers = model.NewUserStore()
+	// model.GlobalUsers = model.NewUserStore()
 	needSave := false
 	for i := range C.Users {
 		uc := &C.Users[i]
