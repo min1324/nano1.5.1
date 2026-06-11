@@ -1,6 +1,8 @@
 *.exe
 *.exe~
 
+nano
+
 files/
 
 logs/

@@ -107,7 +107,7 @@ func main() {
 	mux.Handle("/", fileServer)
 
 	logger.Info("system", "启动", address, config.C.UploadDir)
-	fmt.Printf("服务已启动，监听地址: %s\n", address)
+	fmt.Printf("服务已启动，监听地址:[%s],本机IPV4:%s,IPV6:[%s]\n", address, config.C.LocalIP.IPv4, config.C.LocalIP.IPv6)
 
 	// 使用 http.Server 支持优雅关闭
 	srv := &http.Server{
@@ -135,28 +135,25 @@ func main() {
 
 // 在main.go的Shutdown流程中添加
 func gracefulShutdown(srv *http.Server) {
-	fmt.Println("正在优雅关闭服务...")
 	// 1. 停止后台任务
 	handler.StopBackgroundTasks()
 
-	fmt.Println("正在等待正在处理的请求...")
 	// 2. 给予5秒时间完成正在处理的请求
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	fmt.Println("正在关闭HTTP服务器...")
 	// 3. 关闭HTTP服务器
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("服务强制关闭: %v\n", err)
 	}
 
-	fmt.Println("HTTP服务器已关闭")
 	// 4. 停止日志系统
 	logger.Stop()
 
-	fmt.Println("日志系统已停止")
 	// 5. 清理文件操作锁（可选）
 	service.FM.CleanupLocks()
+
+	fmt.Println("服务器已关闭")
 }
 
 // neuteredFileSystem 禁用目录列表的文件系统包装器
