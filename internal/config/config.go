@@ -43,7 +43,6 @@ type Config struct {
 	LogMaxBackups       int          `yaml:"logMaxBackups"`  // 保留的日志备份数量
 	LogMaxAge           int          `yaml:"logMaxAge"`      // 日志保留天数
 	Users               []UserConfig `yaml:"users"`          // 用户列表
-	LocalIP             localIP      `yaml:"localIP"`        // 本地IP地址
 }
 
 type localIP struct {
@@ -52,7 +51,29 @@ type localIP struct {
 }
 
 // C 全局配置实例，由 Load() 初始化
-var C *Config
+var (
+	C  *Config
+	IP localIP
+)
+
+func init() {
+	// 获取本地IP地址
+	ipv4s, ipv6s, err := getLocalIP()
+	if err == nil {
+		for _, ip := range ipv4s {
+			if strings.HasPrefix(ip, "192.168.") {
+				IP.IPv4 = ip
+				break
+			}
+		}
+	}
+	if IP.IPv4 == "" {
+		IP.IPv4 = "0,0,0,0"
+	}
+	if len(ipv6s) > 0 {
+		IP.IPv6 = ipv6s[0]
+	}
+}
 
 // configPath 配置文件路径
 const configPath = "config.yaml"
@@ -141,16 +162,6 @@ func Load() {
 		def.resolveBytes()
 		C = def
 		return
-	}
-	// 获取本地IP地址
-	ipv4s, ipv6s, err := getLocalIP()
-	if err != nil {
-		fmt.Printf("获取本地IP地址失败: %v", err)
-		return
-	}
-	cfg.LocalIP = localIP{
-		IPv4: ipv4s[0],
-		IPv6: ipv6s[0],
 	}
 
 	// 应用默认值

@@ -107,7 +107,7 @@ func main() {
 	mux.Handle("/", fileServer)
 
 	logger.Info("system", "启动", address, config.C.UploadDir)
-	fmt.Printf("服务已启动，监听地址:[%s],本机IPV4:%s,IPV6:[%s]\n", address, config.C.LocalIP.IPv4, config.C.LocalIP.IPv6)
+	fmt.Printf("服务已启动，监听地址:[%s],本机IPV4:%s\n", address, config.IP.IPv4)
 
 	// 使用 http.Server 支持优雅关闭
 	srv := &http.Server{

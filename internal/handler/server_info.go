@@ -14,6 +14,11 @@ import (
 	"nano/internal/service"
 )
 
+var (
+	ipv6           string
+	lastUpdateTime time.Time
+)
+
 // handleServerInfo 返回服务器信息，包括IPv4地址和端口
 func handleServerInfo(w http.ResponseWriter, r *http.Request) {
 	// 获取服务器监听端口
@@ -27,16 +32,19 @@ func handleServerInfo(w http.ResponseWriter, r *http.Request) {
 		port = parts[len(parts)-1]
 	}
 
-	// 获取公网 IPv6 地址
-	ipv6, err := getPublicIPv6()
-	if err != nil {
-		log.Printf("获取公网IPv6地址失败: %v", err)
-		ipv6 = config.C.LocalIP.IPv6
+	var err error
+	if ipv6 == "" || lastUpdateTime.Add(10*time.Minute).Before(time.Now()) {
+		lastUpdateTime = time.Now()
+		// 获取公网ipv6地址
+		ipv6, err = getPublicIPv6()
+		if err != nil {
+			ipv6 = config.IP.IPv6
+		}
 	}
 
 	// 返回IPv4、IPv6地址和服务器端口
 	respondWithSuccess(w, map[string]any{
-		"ipv4": config.C.LocalIP.IPv4,
+		"ipv4": config.IP.IPv4,
 		"ipv6": ipv6,
 		"port": port,
 	})

@@ -14,6 +14,9 @@ import (
 	"nano/internal/service"
 )
 
+// maxMemory 最大内存使用量（64MB）
+const maxMemory = 64 * 1024 * 1024 // 64MB
+
 // 全局重命名映射，用于跨批次上传时保持文件夹结构一致
 //
 // key: 会话ID:原始文件夹名
@@ -82,7 +85,7 @@ func StopBackgroundTasks() {
 //   - 未提供文件时返回 400 错误
 func handleUpload(w http.ResponseWriter, r *http.Request) {
 	// 增加内存限制以支持更多文件上传，但使用流式处理避免内存溢出
-	if err := r.ParseMultipartForm(128 << 20); err != nil {
+	if err := r.ParseMultipartForm(maxMemory); err != nil {
 		respondWithError(w, "解析表单失败", http.StatusBadRequest)
 		return
 	}
