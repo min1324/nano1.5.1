@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  nanocloud:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nanocloud
+    ports:
+      - "8080:8080"
+    volumes:
+      # 持久化文件存储
+      - ./files:/app/files
+      # 持久化日志
+      - ./logs:/app/logs
+      # 配置文件（可选：如需修改配置）
+      - ./config.yaml:/app/config.yaml
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

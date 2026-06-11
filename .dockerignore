@@ -1,0 +1,57 @@
+# Git 相关
+.git
+.gitignore
+
+# 文档
+readme.md
+README.md
+docs
+
+# 日志
+logs
+*.log
+
+# 临时文件
+*.tmp
+*.temp
+
+# IDE 相关
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 测试文件
+*_test.go
+test/
+tests/
+
+# 构建产物
+nano
+nano.exe
+dist/
+build/
+
+# Docker 相关
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 脚本文件
+install.bat
+install.sh
+start.bat
+start.sh
+stop.bat
+stop.sh
+uninstall.bat
+uninstall.sh
+
+# 已上传的文件
+files/*
+!files/.gitkeep
