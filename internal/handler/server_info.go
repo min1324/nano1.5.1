@@ -17,6 +17,7 @@ import (
 var (
 	ipv6           string
 	lastUpdateTime time.Time
+	lastErrorTime  time.Time // 上次查询失败的时间，用于错误缓存
 )
 
 // handleServerInfo 返回服务器信息，包括IPv4地址和端口
@@ -32,13 +33,31 @@ func handleServerInfo(w http.ResponseWriter, r *http.Request) {
 		port = parts[len(parts)-1]
 	}
 
-	var err error
-	if ipv6 == "" || lastUpdateTime.Add(10*time.Minute).Before(time.Now()) {
-		lastUpdateTime = time.Now()
-		// 获取公网ipv6地址
-		ipv6, err = getPublicIPv6()
+	now := time.Now()
+	// 满足以下条件之一时刷新 IPv6：
+	// 1. ipv6 为空且上次查询失败已超过 10 分钟（避免重复失败请求）
+	// 2. 上次成功查询已超过 10 分钟（定期刷新）
+	needUpdate := false
+	if ipv6 != "" && lastUpdateTime.Add(10*time.Minute).Before(now) {
+		needUpdate = true
+	}
+	if ipv6 == "" && !lastErrorTime.IsZero() && lastErrorTime.Add(10*time.Minute).Before(now) {
+		needUpdate = true
+	}
+	if ipv6 == "" && lastErrorTime.IsZero() {
+		// 首次查询
+		needUpdate = true
+	}
+
+	if needUpdate {
+		lastUpdateTime = now
+		externalIPv6, err := getPublicIPv6()
 		if err != nil {
+			lastErrorTime = now
 			ipv6 = config.IP.IPv6
+		} else {
+			lastErrorTime = time.Time{} // 清除错误缓存
+			ipv6 = externalIPv6
 		}
 	}
 

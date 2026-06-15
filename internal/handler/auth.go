@@ -54,7 +54,6 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	// 登录频率限制：按 IP 控制
 	clientIP := getClientIP(r)
-	// loginKey := clientIP + "|" + req.Username
 	loginKey := clientIP
 
 	if attempt, exists := loginAttemptStore.Load(loginKey); exists {

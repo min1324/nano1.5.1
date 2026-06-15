@@ -25,7 +25,8 @@ var (
 	globalRenameMap      = make(map[string]string) // 重命名映射表
 	renameMapMutex       sync.RWMutex              // 读写锁，保护映射表的并发访问
 	renameMapLastUpdated time.Time                 // 最后更新时间，用于判断是否需要清理
-	shutdownChan         = make(chan struct{})     // 添加关闭通道
+	shutdownChan         = make(chan struct{})     // 关闭通道
+	shutdownOnce         sync.Once                 // 保护 shutdownChan 避免重复关闭
 )
 
 // init 初始化时启动清理任务
@@ -61,9 +62,12 @@ func cleanupExpiredRenameMaps() {
 	}
 }
 
-// 在main.go的Shutdown流程中调用
+// StopBackgroundTasks 停止所有后台任务，在 main.go 的 Shutdown 流程中调用
+// 使用 sync.Once 确保 shutdownChan 只关闭一次，防止重复关闭导致 panic
 func StopBackgroundTasks() {
-	close(shutdownChan)
+	shutdownOnce.Do(func() {
+		close(shutdownChan)
+	})
 }
 
 // handleUpload 处理文件上传请求

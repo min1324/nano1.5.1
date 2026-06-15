@@ -1,12 +1,9 @@
-// API 基础地址（前后端分离部署时修改为后端地址，如 "http://localhost:8080"）
-// 同源部署时留空字符串即可
 const API_BASE = "";
 
-// ===== 全局状态 =====
 let currentPath = "/";
 let selectedFile = null;
-let selectedFiles = []; // 多选文件列表
-let lastSelectedIndex = -1; // 上次选中的索引，用于 Shift 范围选
+let selectedFiles = [];
+let lastSelectedIndex = -1;
 let clipboard = { action: null, sourcePaths: [] };
 let sortField = "name";
 let sortOrder = "asc";
@@ -14,26 +11,23 @@ let navHistory = ["/"];
 let navIndex = 0;
 let currentImageList = [];
 let currentImageIndex = -1;
-let isSearching = false; // 是否处于搜索状态
-let searchQuery = ""; // 当前搜索关键词
-let currentUser = null; // 当前登录用户
-let currentTheme = localStorage.getItem('theme') || 'light'; // 当前主题
-let authToken = localStorage.getItem('authToken') || ''; // 认证令牌
-let serverInfoCache = null; // 服务器信息缓存（IP地址等）
-let audioPlaylist = []; // 音频播放列表
-let currentAudioIndex = -1; // 当前播放的音频索引
-let audioPlayMode = 'sequential'; // 播放模式: sequential(顺序), random(随机), loop(循环)
+let isSearching = false;
+let searchQuery = "";
+let currentUser = null;
+let currentTheme = localStorage.getItem('theme') || 'light';
+let authToken = localStorage.getItem('authToken') || '';
+let serverInfoCache = null;
+let audioPlaylist = [];
+let currentAudioIndex = -1;
+let audioPlayMode = 'sequential';
 
-// 音频文件扩展名
 const audioExts = ["mp3", "wav", "flac", "aac", "ogg", "m4a", "wma"];
 
-// 拖选相关变量
 let isDragging = false;
 let dragStartX = 0;
 let dragStartY = 0;
 let dragSelectionBox = null;
 
-// 可编辑文件扩展名
 const EDITABLE_EXTENSIONS = [
     "txt", "html", "htm", "css", "js", "ts", "json", "xml", "csv",
     "py", "java", "go", "c", "cpp", "h", "hpp", "cs", "rs", "swift",
@@ -51,7 +45,6 @@ const EDITABLE_FILENAMES = [
     "babelrc", "npmrc", "bowerrc"
 ];
 
-// ===== 工具函数 =====
 function isEditableFile(name) {
     const lowerName = name.toLowerCase();
     if (lowerName.includes(".")) {
@@ -135,11 +128,10 @@ function getFileIconColor(filename) {
     return "#94a3b8";
 }
 
-// ===== 排序 =====
 function sortFiles(files) {
     if (!files || files.length === 0) return [];
 
-    // 过滤隐藏文件
+
     const showHidden = localStorage.getItem('showHidden') === 'true';
     if (!showHidden) {
         files = files.filter(f => !f.name.startsWith('.'));
@@ -165,7 +157,6 @@ function sortFiles(files) {
     return [...dirs, ...regularFiles];
 }
 
-// ===== 导航 =====
 function navigateTo(path) {
     if (path === currentPath) return;
     navHistory = navHistory.slice(0, navIndex + 1);
@@ -207,10 +198,9 @@ function updateNavButtons() {
     if (upBtn) upBtn.disabled = currentPath === "/";
 }
 
-// ===== API 调用 =====
 async function apiCall(url, options = {}) {
     try {
-        // 如果有token，添加认证头
+
         if (authToken) {
             options.headers = options.headers || {};
             options.headers['Authorization'] = `Bearer ${authToken}`;
@@ -219,7 +209,7 @@ async function apiCall(url, options = {}) {
         const response = await fetch(API_BASE + url, options);
         const data = await response.json();
 
-        // 如果返回401未授权，清除登录状态（登录请求除外，由handleLogin自行处理）
+
         if (response.status === 401 && !url.includes('/api/login')) {
             handleLogout();
             return { success: false, message: '登录已过期，请重新登录' };
@@ -238,7 +228,6 @@ async function apiCall(url, options = {}) {
     }
 }
 
-// 带认证头的fetch封装（用于非JSON响应）
 function authFetch(url, options = {}) {
     if (authToken) {
         options.headers = options.headers || {};
@@ -247,13 +236,11 @@ function authFetch(url, options = {}) {
     return fetch(API_BASE + url, options);
 }
 
-// 带认证头的XHR封装（用于文件上传）
 function authXHR() {
     const xhr = new XMLHttpRequest();
     return xhr;
 }
 
-// ===== 文件列表 =====
 function loadFiles(path) {
     currentPath = path;
     isSearching = false;
@@ -261,12 +248,12 @@ function loadFiles(path) {
     apiCall(`/api/list?path=${encodeURIComponent(path)}`)
         .then(data => {
             if (data.success) {
-                // 保存当前目录所有文件，用于搜索过滤
+
                 currentAllFiles = data.data.files;
-                // 清空搜索框
+
                 document.getElementById("search-input").value = "";
                 document.getElementById("search-clear-btn").classList.remove("visible");
-                // 渲染文件列表
+
                 renderFiles(sortFiles(currentAllFiles));
                 updateBreadcrumb(path);
                 updateNavButtons();
@@ -280,8 +267,6 @@ function loadFiles(path) {
         });
 }
 
-// ===== 搜索功能 =====
-// 执行文件搜索
 function searchFiles(query, path = currentPath, recursive = true) {
     if (!query || query.trim() === "") {
         isSearching = false;
@@ -293,7 +278,7 @@ function searchFiles(query, path = currentPath, recursive = true) {
     isSearching = true;
     searchQuery = query.trim();
 
-    // 显示加载提示
+
     const container = document.getElementById("file-container");
     container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><div class="loading-text">搜索中...</div></div>';
 
@@ -303,13 +288,13 @@ function searchFiles(query, path = currentPath, recursive = true) {
                 currentAllFiles = data.data.files;
                 renderFiles(sortFiles(currentAllFiles));
 
-                // 更新状态栏显示搜索结果
+
                 const info = document.getElementById("file-count-info");
                 if (info) {
                     info.textContent = `找到 ${data.data.count} 个匹配项`;
                 }
 
-                // 显示搜索提示
+
                 showToast(`找到 ${data.data.count} 个匹配项`, "success");
             } else {
                 showToast(data.message, "error");
@@ -323,7 +308,6 @@ function searchFiles(query, path = currentPath, recursive = true) {
         });
 }
 
-// 清除搜索
 function clearSearch() {
     document.getElementById("search-input").value = "";
     document.getElementById("search-clear-btn").classList.remove("visible");
@@ -336,13 +320,13 @@ function renderFiles(files) {
     const container = document.getElementById("file-container");
     container.innerHTML = "";
 
-    // 保存当前目录的图片文件列表
+
     const imageExts = ["jpg", "jpeg", "png", "gif", "bmp", "webp", "svg", "ico", "tiff", "tif", "avif"];
     currentImageList = files.filter(f => !f.isDir && imageExts.includes(f.name.split(".").pop().toLowerCase()));
 
     const isListView = container.classList.contains("list-view");
 
-    // 列表头
+
     if (isListView) {
         const header = document.createElement("div");
         header.className = "list-header";
@@ -397,7 +381,7 @@ function renderFiles(files) {
         fileItem.addEventListener("contextmenu", function(e) {
             e.preventDefault();
             e.stopPropagation();
-            // 如果文件未被选中，则选中它；如果已选中，保持选中状态
+
             if (!this.classList.contains("selected")) {
                 selectFile(this, false, false, index);
             }
@@ -429,11 +413,11 @@ function escapeHtml(text) {
 function selectFile(fileItem, ctrlKey, shiftKey, index) {
     const isAlreadySelected = fileItem.classList.contains("selected");
 
-    // Shift 范围选
+
     if (shiftKey && lastSelectedIndex >= 0) {
         const start = Math.min(lastSelectedIndex, index);
         const end = Math.max(lastSelectedIndex, index);
-        // 如果没有 Ctrl，先清除其他选中
+
         if (!ctrlKey) {
             document.querySelectorAll(".file-item.selected").forEach(item => item.classList.remove("selected"));
             selectedFiles = [];
@@ -455,7 +439,7 @@ function selectFile(fileItem, ctrlKey, shiftKey, index) {
         return;
     }
 
-    // Ctrl 多选
+
     if (ctrlKey) {
         if (isAlreadySelected) {
             fileItem.classList.remove("selected");
@@ -473,7 +457,7 @@ function selectFile(fileItem, ctrlKey, shiftKey, index) {
         return;
     }
 
-    // 普通单击：如果已选中则取消，否则仅选中当前
+
     if (isAlreadySelected) {
         fileItem.classList.remove("selected");
         selectedFiles = selectedFiles.filter(f => f.path !== fileItem.dataset.path);
@@ -492,11 +476,10 @@ function selectFile(fileItem, ctrlKey, shiftKey, index) {
     updateSelectionInfo();
 }
 
-// 更新选中状态信息
 function updateSelectionInfo() {
     const info = document.getElementById("selected-file-info");
     const downloadBtn = document.getElementById("download-btn");
-    // 隐藏二维码弹出框
+
     var qrPopup = document.getElementById('qr-popup');
     if (qrPopup) qrPopup.classList.remove('show');
     if (!info) return;
@@ -514,14 +497,13 @@ function updateSelectionInfo() {
         }
     } else {
         info.textContent = selectedFiles.length + " 个项目已选中";
-        selectedFile = selectedFiles[0]; // 右键菜单使用第一个
+        selectedFile = selectedFiles[0];
         if (downloadBtn) {
             downloadBtn.disabled = false;
         }
     }
 }
 
-// 清除所有选中
 function clearSelection() {
     document.querySelectorAll(".file-item.selected").forEach(item => item.classList.remove("selected"));
     selectedFiles = [];
@@ -531,97 +513,95 @@ function clearSelection() {
     if (info) info.textContent = "";
 }
 
-// ===== 拖选功能 =====
 function setupDragSelection() {
     const contentArea = document.getElementById("content-area");
     const fileContainer = document.getElementById("file-container");
-    
-    // 创建拖选框元素
+
+
     dragSelectionBox = document.createElement("div");
     dragSelectionBox.className = "drag-selection-box";
     dragSelectionBox.style.display = "none";
     contentArea.appendChild(dragSelectionBox);
-    
+
     let startX, startY;
-    let hasMoved = false; // 标记鼠标是否移动过
-    
-    // 鼠标按下开始拖选
+    let hasMoved = false;
+
+
     contentArea.addEventListener("mousedown", function(e) {
-        // 如果点击的是文件项或工具栏，不进行拖选
+
         if (e.target.closest(".file-item") || e.target.closest(".toolbar")) {
             return;
         }
-        
-        // 只在左键按下时开始拖选
+
+
         if (e.button !== 0) return;
-        
+
         isDragging = true;
         hasMoved = false;
         startX = e.clientX;
         startY = e.clientY;
-        
-        // 清除之前的选中状态
+
+
         clearSelection();
-        
-        // 显示并初始化拖选框
+
+
         dragSelectionBox.style.display = "block";
         dragSelectionBox.style.left = startX + "px";
         dragSelectionBox.style.top = startY + "px";
         dragSelectionBox.style.width = "0px";
         dragSelectionBox.style.height = "0px";
-        
+
         e.preventDefault();
     });
-    
-    // 鼠标移动更新拖选框
+
+
     document.addEventListener("mousemove", function(e) {
         if (!isDragging) return;
-        
+
         const currentX = e.clientX;
         const currentY = e.clientY;
-        
-        // 检查鼠标是否移动过（避免微小抖动触发拖选）
+
+
         if (!hasMoved && Math.abs(currentX - startX) < 3 && Math.abs(currentY - startY) < 3) {
             return;
         }
         hasMoved = true;
-        
-        // 计算拖选框的位置和大小
+
+
         const left = Math.min(startX, currentX);
         const top = Math.min(startY, currentY);
         const width = Math.abs(currentX - startX);
         const height = Math.abs(currentY - startY);
-        
+
         dragSelectionBox.style.left = left + "px";
         dragSelectionBox.style.top = top + "px";
         dragSelectionBox.style.width = width + "px";
         dragSelectionBox.style.height = height + "px";
-        
-        // 检查哪些文件项在拖选框内
+
+
         selectItemsInBox(left, top, width, height);
     });
-    
-    // 鼠标松开结束拖选
+
+
     document.addEventListener("mouseup", function(e) {
         if (!isDragging) return;
-        
-        // 如果鼠标没有移动过，说明是点击而不是拖选
+
+
         if (!hasMoved) {
             clearSelection();
         }
-        
+
         dragSelectionBox.style.display = "none";
         dragSelectionBox.style.width = "0px";
         dragSelectionBox.style.height = "0px";
-        
-        // 延迟重置 isDragging 状态，避免 click 事件触发时取消选择
+
+
         setTimeout(() => {
             isDragging = false;
         }, 50);
     });
 }
 
-// 选择拖选框内的文件项
 function selectItemsInBox(left, top, width, height) {
     const fileItems = document.querySelectorAll(".file-item");
     const boxRect = {
@@ -630,21 +610,21 @@ function selectItemsInBox(left, top, width, height) {
         right: left + width,
         bottom: top + height
     };
-    
-    // 清除之前的选中状态
+
+
     selectedFiles = [];
-    
+
     fileItems.forEach((item, index) => {
         const itemRect = item.getBoundingClientRect();
-        
-        // 检查文件项是否与拖选框相交
+
+
         const isIntersecting = !(
             itemRect.right < boxRect.left ||
             itemRect.left > boxRect.right ||
             itemRect.bottom < boxRect.top ||
             itemRect.top > boxRect.bottom
         );
-        
+
         if (isIntersecting) {
             item.classList.add("selected");
             selectedFiles.push({
@@ -659,7 +639,7 @@ function selectItemsInBox(left, top, width, height) {
             item.classList.remove("selected");
         }
     });
-    
+
     updateSelectionInfo();
 }
 
@@ -672,7 +652,6 @@ function updateStatusBar(fileCount, dirCount) {
     info.textContent = parts.length > 0 ? parts.join("，") : "空文件夹";
 }
 
-// ===== 面包屑导航 =====
 function updateBreadcrumb(path) {
     const container = document.getElementById("breadcrumb-container");
     container.innerHTML = "";
@@ -710,7 +689,6 @@ function updateBreadcrumb(path) {
     });
 }
 
-// ===== 目录树 =====
 function loadTree() {
     apiCall('/api/list?path=/')
         .then(data => {
@@ -802,16 +780,15 @@ function toggleTreeChildren(childContainer, toggleIcon) {
         }, 300);
     } else {
         childContainer.style.maxHeight = childContainer.scrollHeight + "px";
-        childContainer.offsetHeight; // force reflow
+        childContainer.offsetHeight;
         childContainer.classList.add("collapsed");
         childContainer.style.maxHeight = "0px";
         toggleIcon.className = "fas fa-chevron-right tree-toggle";
     }
 }
 
-// ===== 存储空间 =====
 function calculateStorage() {
-    // 未登录时不调用存储空间API
+
     if (!authToken || !currentUser) {
         const storageText = document.getElementById("storage-text");
         if (storageText) {
@@ -839,21 +816,20 @@ function calculateStorage() {
         .catch(() => {});
 }
 
-// 检查文件大小是否超过最大容量
 function checkStorageSpace(files) {
     return apiCall('/api/storage')
         .then(data => {
             if (!data.success) return false;
             const usedSize = data.data.usedSize;
             const maxSize = data.data.maxSize;
-            
-            // 计算文件总大小
+
+
             let totalSize = 0;
             for (const file of files) {
                 totalSize += file.size;
             }
-            
-            // 检查是否超过最大容量
+
+
             if (usedSize + totalSize > maxSize) {
                 const remainingSpace = maxSize - usedSize;
                 showToast(`存储空间不足！剩余空间: ${formatFileSize(remainingSpace)}，需要空间: ${formatFileSize(totalSize)}`, 'error');
@@ -867,9 +843,8 @@ function checkStorageSpace(files) {
         });
 }
 
-// ===== 上传文件 =====
 function uploadFiles() {
-    // 权限验证：只有登录用户可以上传文件
+
     if (!currentUser) {
         showToast('请先登录后再上传文件', 'error');
         return;
@@ -881,20 +856,20 @@ function uploadFiles() {
         return;
     }
 
-    // 检查存储空间
+
     const files = Array.from(fileInput.files);
     checkStorageSpace(files).then(hasSpace => {
         if (!hasSpace) {
             return;
         }
 
-        // 分批上传，每批最多100个文件
+
         const batchSize = 100;
         const totalBatches = Math.ceil(files.length / batchSize);
         let currentBatch = 0;
         let uploadedCount = 0;
         let failedCount = 0;
-        // 生成唯一会话ID，确保不同上传操作不会互相干扰
+
         const uploadSessionId = Date.now().toString(36) + Math.random().toString(36).substr(2);
 
         const progressDiv = document.getElementById("upload-progress");
@@ -905,16 +880,16 @@ function uploadFiles() {
 
         function uploadBatch() {
             if (currentBatch >= totalBatches) {
-                // 所有批次上传完成
+
                 progressDiv.style.display = "none";
                 progressBar.style.width = "0%";
                 progressBar.classList.remove("progress-bar-animated");
                 progressText.textContent = "0%";
-                
+
                 loadFiles(currentPath);
                 loadTree();
                 calculateStorage();
-                
+
                 if (failedCount > 0) {
                     showToast(`上传完成：成功 ${uploadedCount} 个，失败 ${failedCount} 个`, "warning");
                 } else {
@@ -939,7 +914,7 @@ function uploadFiles() {
             const xhr = new XMLHttpRequest();
             xhr.open("POST", API_BASE + "/api/upload");
 
-            // 添加认证头
+
             if (authToken) {
                 xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
             }
@@ -974,29 +949,28 @@ function uploadFiles() {
                 }
 
                 currentBatch++;
-                // 继续上传下一批
-                setTimeout(uploadBatch, 100); // 添加小延迟，避免服务器压力过大
+
+                setTimeout(uploadBatch, 100);
             };
 
             xhr.onerror = function() {
                 failedCount += batchFiles.length;
                 showToast("上传失败，正在重试...", "error");
-                // 继续上传下一批
+
                 currentBatch++;
-                setTimeout(uploadBatch, 1000); // 失败后等待1秒再重试
+                setTimeout(uploadBatch, 1000);
             };
 
             xhr.send(formData);
         }
 
-        // 开始上传第一批
+
         uploadBatch();
     });
 }
 
-// ===== 上传文件夹 =====
 function uploadFolder() {
-    // 权限验证：只有登录用户可以上传文件夹
+
     if (!currentUser) {
         showToast('请先登录后再上传文件夹', 'error');
         return;
@@ -1008,20 +982,20 @@ function uploadFolder() {
         return;
     }
 
-    // 检查存储空间
+
     const files = Array.from(folderInput.files);
     checkStorageSpace(files).then(hasSpace => {
         if (!hasSpace) {
             return;
         }
 
-        // 分批上传，每批最多100个文件
+
         const batchSize = 100;
         const totalBatches = Math.ceil(files.length / batchSize);
         let currentBatch = 0;
         let uploadedCount = 0;
         let failedCount = 0;
-        // 生成唯一会话ID，确保不同上传操作不会互相干扰
+
         const uploadSessionId = Date.now().toString(36) + Math.random().toString(36).substr(2);
 
         const progressDiv = document.getElementById("folder-upload-progress");
@@ -1032,16 +1006,16 @@ function uploadFolder() {
 
         function uploadBatch() {
             if (currentBatch >= totalBatches) {
-                // 所有批次上传完成
+
                 progressDiv.style.display = "none";
                 progressBar.style.width = "0%";
                 progressBar.classList.remove("progress-bar-animated");
                 progressText.textContent = "0%";
-                
+
                 loadFiles(currentPath);
                 loadTree();
                 calculateStorage();
-                
+
                 if (failedCount > 0) {
                     showToast(`上传完成：成功 ${uploadedCount} 个，失败 ${failedCount} 个`, "warning");
                 } else {
@@ -1072,7 +1046,7 @@ function uploadFolder() {
             const xhr = new XMLHttpRequest();
             xhr.open("POST", API_BASE + "/api/upload");
 
-            // 添加认证头
+
             if (authToken) {
                 xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
             }
@@ -1107,27 +1081,26 @@ function uploadFolder() {
                 }
 
                 currentBatch++;
-                // 继续上传下一批
-                setTimeout(uploadBatch, 100); // 添加小延迟，避免服务器压力过大
+
+                setTimeout(uploadBatch, 100);
             };
 
             xhr.onerror = function() {
                 failedCount += batchFiles.length;
                 showToast("上传失败，正在重试...", "error");
-                // 继续上传下一批
+
                 currentBatch++;
-                setTimeout(uploadBatch, 1000); // 失败后等待1秒再重试
+                setTimeout(uploadBatch, 1000);
             };
 
             xhr.send(formData);
         }
 
-        // 开始上传第一批
+
         uploadBatch();
     });
 }
 
-// ===== 拖拽上传区域 =====
 function setupDropzone(dropzoneId, inputId) {
     const dropzone = document.getElementById(dropzoneId);
     const fileInput = document.getElementById(inputId);
@@ -1156,7 +1129,7 @@ function setupDropzone(dropzoneId, inputId) {
         e.preventDefault();
         this.classList.remove("drag-over");
 
-        // 使用 webkitGetAsEntry 支持拖拽文件夹时保持目录结构
+
         const items = e.dataTransfer.items;
         if (items && items.length > 0 && items[0].webkitGetAsEntry) {
             const entries = [];
@@ -1164,7 +1137,7 @@ function setupDropzone(dropzoneId, inputId) {
                 const entry = items[i].webkitGetAsEntry();
                 if (entry) entries.push(entry);
             }
-            // 检查是否包含目录
+
             const hasDir = entries.some(entry => entry.isDirectory);
             if (hasDir) {
                 traverseEntries(entries, "").then(files => {
@@ -1178,19 +1151,18 @@ function setupDropzone(dropzoneId, inputId) {
             }
         }
 
-        // 普通文件拖拽，走原有逻辑
+
         fileInput.files = e.dataTransfer.files;
         fileInput.dispatchEvent(new Event("change"));
     });
 }
 
-// 递归遍历文件系统条目，收集所有文件及其相对路径
 async function traverseEntries(entries, basePath) {
     const files = [];
     for (const entry of entries) {
         if (entry.isFile) {
             const file = await new Promise(resolve => entry.file(resolve));
-            // 创建带相对路径的文件对象
+
             const relativePath = basePath ? basePath + "/" + file.name : file.name;
             Object.defineProperty(file, "relativePath", { value: relativePath, writable: false });
             files.push(file);
@@ -1218,27 +1190,26 @@ async function traverseEntries(entries, basePath) {
     return files;
 }
 
-// 上传拖拽的文件（支持保持文件夹结构）
 function uploadDroppedFiles(files, targetPath) {
-    // 权限验证：只有登录用户可以上传文件
+
     if (!currentUser) {
         showToast('请先登录后再上传文件', 'error');
         return;
     }
 
-    // 检查存储空间
+
     checkStorageSpace(files).then(hasSpace => {
         if (!hasSpace) {
             return;
         }
 
-        // 分批上传，每批最多100个文件
+
         const batchSize = 100;
         const totalBatches = Math.ceil(files.length / batchSize);
         let currentBatch = 0;
         let uploadedCount = 0;
         let failedCount = 0;
-        // 生成唯一会话ID，确保不同上传操作不会互相干扰
+
         const uploadSessionId = Date.now().toString(36) + Math.random().toString(36).substr(2);
 
         const progressDiv = document.getElementById("upload-progress");
@@ -1249,16 +1220,16 @@ function uploadDroppedFiles(files, targetPath) {
 
         function uploadBatch() {
             if (currentBatch >= totalBatches) {
-                // 所有批次上传完成
+
                 progressDiv.style.display = "none";
                 progressBar.style.width = "0%";
                 progressBar.classList.remove("progress-bar-animated");
                 progressText.textContent = "0%";
-                
+
                 loadFiles(currentPath);
                 loadTree();
                 calculateStorage();
-                
+
                 if (failedCount > 0) {
                     showToast(`上传完成：成功 ${uploadedCount} 个，失败 ${failedCount} 个`, "warning");
                 } else {
@@ -1289,7 +1260,7 @@ function uploadDroppedFiles(files, targetPath) {
             const xhr = new XMLHttpRequest();
             xhr.open("POST", API_BASE + "/api/upload");
 
-            // 添加认证头
+
             if (authToken) {
                 xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
             }
@@ -1324,22 +1295,22 @@ function uploadDroppedFiles(files, targetPath) {
                 }
 
                 currentBatch++;
-                // 继续上传下一批
-                setTimeout(uploadBatch, 100); // 添加小延迟，避免服务器压力过大
+
+                setTimeout(uploadBatch, 100);
             };
 
             xhr.onerror = function() {
                 failedCount += batchFiles.length;
                 showToast("上传失败，正在重试...", "error");
-                // 继续上传下一批
+
                 currentBatch++;
-                setTimeout(uploadBatch, 1000); // 失败后等待1秒再重试
+                setTimeout(uploadBatch, 1000);
             };
 
             xhr.send(formData);
         }
 
-        // 开始上传第一批
+
         uploadBatch();
     });
 }
@@ -1417,9 +1388,8 @@ function displayFolderFileList(files) {
     }
 }
 
-// ===== 文件操作 =====
 function downloadFile(path) {
-    // 使用authFetch下载文件，支持认证头
+
     authFetch(`/api/download?path=${encodeURIComponent(path)}`)
         .then(response => {
             if (!response.ok) throw new Error('下载失败');
@@ -1429,7 +1399,7 @@ function downloadFile(path) {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            // 从路径中提取文件名
+
             const fileName = path.split('/').pop();
             a.download = fileName;
             document.body.appendChild(a);
@@ -1449,20 +1419,20 @@ function downloadSelectedFiles() {
         return;
     }
 
-    // 单个普通文件直接下载
+
     if (selectedFiles.length === 1 && !selectedFiles[0].isDir) {
         showToast("正在准备下载...", "info");
         downloadFile(selectedFiles[0].path);
         return;
     }
 
-    // 目录或批量下载：使用batch-download API打包为zip
+
     showToast("正在打包文件，请稍候...", "info");
-    
-    // 提前保存文件信息，防止异步操作中被修改
+
+
     const filesToDownload = [...selectedFiles];
     const paths = filesToDownload.map(f => f.path);
-    
+
     const downloadBtn = document.getElementById("download-btn");
     const originalHTML = downloadBtn.innerHTML;
     downloadBtn.disabled = true;
@@ -1481,7 +1451,7 @@ function downloadSelectedFiles() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        // 单个目录用目录名，多个用"第一个文件+..等.zip"
+
         const zipName = filesToDownload.length === 1 ? filesToDownload[0].name + ".zip" : filesToDownload[0].name + "..等.zip";
         a.download = zipName;
         document.body.appendChild(a);
@@ -1501,7 +1471,7 @@ function downloadSelectedFiles() {
 }
 
 function deleteFile(path) {
-    // 权限验证
+
     if (!currentUser || currentUser.type !== 'admin' && currentUser.type !== 'root') {
         showToast('只有管理员可以删除文件', 'error');
         return;
@@ -1530,9 +1500,8 @@ function deleteFile(path) {
     });
 }
 
-// 批量删除文件
 function batchDeleteFiles(paths) {
-    // 权限验证
+
     if (!currentUser || currentUser.type !== 'admin' && currentUser.type !== 'root') {
         showToast('只有管理员可以删除文件', 'error');
         return;
@@ -1569,7 +1538,7 @@ function batchDeleteFiles(paths) {
 }
 
 function renameFile() {
-    // 权限验证：只有管理员可以重命名
+
     if (!currentUser || currentUser.type !== 'admin' && currentUser.type !== 'root') {
         showToast('只有管理员可以重命名文件', 'error');
         return;
@@ -1605,7 +1574,7 @@ function renameFile() {
 }
 
 function openRenameModal() {
-    // 权限验证：只有管理员可以重命名
+
     if (!currentUser || currentUser.type !== 'admin' && currentUser.type !== 'root') {
         showToast('只有管理员可以重命名文件', 'error');
         return;
@@ -1627,7 +1596,7 @@ function openRenameModal() {
 }
 
 function createFolder() {
-    // 权限验证：只有管理员可以创建文件夹
+
     if (!currentUser || currentUser.type !== 'admin' && currentUser.type !== 'root') {
         showToast('只有管理员可以创建文件夹', 'error');
         return;
@@ -1690,10 +1659,8 @@ function createFile() {
     });
 }
 
-
-// ===== 新建文件 =====
 function createFile() {
-    // 权限验证：只有管理员可以创建文件
+
     if (!currentUser || currentUser.type !== 'admin' && currentUser.type !== 'root') {
         showToast('只有管理员可以创建文件', 'error');
         return;
@@ -1725,9 +1692,8 @@ function createFile() {
     });
 }
 
-// ===== 移动/复制 =====
 function openMoveCopyModal() {
-    // 权限验证：只有管理员可以移动/复制文件
+
     if (!currentUser || currentUser.type !== 'admin' && currentUser.type !== 'root') {
         showToast('只有管理员可以移动或复制文件', 'error');
         return;
@@ -1747,7 +1713,6 @@ function openMoveCopyModal() {
     openModal("move-copy-modal");
 }
 
-// 目标目录树当前路径
 let destCurrentPath = "/";
 let destExpandedPaths = new Set();
 
@@ -1771,66 +1736,66 @@ function loadDestinationPath(path) {
 function renderDestinationTree(files) {
     const container = document.getElementById("destination-tree");
     container.innerHTML = "";
-    
+
     const dirs = files.filter(f => f.isDir);
 
-        // 添加根目录选项
+
     const rootItem = document.createElement("div");
     rootItem.className = "dest-tree-item";
     rootItem.dataset.path = "/";
     rootItem.innerHTML =
         '<i class="fas fa-home dest-tree-icon"></i>' +
         '<span>根目录</span>';
-    
+
     rootItem.addEventListener("click", function() {
         document.querySelectorAll(".dest-tree-item.selected").forEach(i => i.classList.remove("selected"));
         rootItem.classList.add("selected");
     });
-    
+
     container.appendChild(rootItem);
-    
+
     if (dirs.length === 0) {
         container.innerHTML = '<div class="dest-empty">此目录为空</div>';
         return;
     }
-    
+
     dirs.forEach(dir => {
         const item = document.createElement("div");
         item.className = "dest-tree-item";
         item.dataset.path = dir.path;
-        
+
         const isExpanded = destExpandedPaths.has(dir.path);
         item.innerHTML =
             '<i class="fas fa-chevron-right dest-tree-toggle' + (isExpanded ? " expanded" : "") + '"></i>' +
             '<i class="fas fa-folder dest-tree-icon"></i>' +
             '<span>' + escapeHtml(dir.name) + '</span>';
-        
-        // 点击展开/折叠
+
+
         const toggleIcon = item.querySelector(".dest-tree-toggle");
         toggleIcon.addEventListener("click", function(e) {
             e.stopPropagation();
             toggleDestFolder(dir.path, item);
         });
-        
-        // 点击展开/折叠并选择目录
+
+
         item.addEventListener("click", function() {
             document.querySelectorAll(".dest-tree-item.selected").forEach(i => i.classList.remove("selected"));
             item.classList.add("selected");
             toggleDestFolder(dir.path, item);
         });
-        
-        // 单击展开/折叠（与toggle图标效果一致）
-        // 已在click事件中处理
-        
+
+
+
+
         container.appendChild(item);
-        
-        // 如果已展开，加载子目录
+
+
         if (isExpanded) {
             const childrenContainer = document.createElement("div");
             childrenContainer.className = "dest-tree-children";
             childrenContainer.style.paddingLeft = "20px";
             container.appendChild(childrenContainer);
-            
+
             apiCall(`/api/list?path=${encodeURIComponent(dir.path)}`)
                 .then(data => {
                     if (data.success) {
@@ -1844,40 +1809,40 @@ function renderDestinationTree(files) {
 
 function renderDestinationTreeChildren(files, container, parentPath) {
     const dirs = files.filter(f => f.isDir);
-    
+
     dirs.forEach(dir => {
         const item = document.createElement("div");
         item.className = "dest-tree-item";
         item.dataset.path = dir.path;
-        
+
         const isExpanded = destExpandedPaths.has(dir.path);
         item.innerHTML =
             '<i class="fas fa-chevron-right dest-tree-toggle' + (isExpanded ? " expanded" : "") + '"></i>' +
             '<i class="fas fa-folder dest-tree-icon"></i>' +
             '<span>' + escapeHtml(dir.name) + '</span>';
-        
+
         const toggleIcon = item.querySelector(".dest-tree-toggle");
         toggleIcon.addEventListener("click", function(e) {
             e.stopPropagation();
             toggleDestFolder(dir.path, item);
         });
-        
+
         item.addEventListener("click", function() {
             document.querySelectorAll(".dest-tree-item.selected").forEach(i => i.classList.remove("selected"));
             item.classList.add("selected");
             toggleDestFolder(dir.path, item);
         });
-        
-        // 单击展开/折叠（与toggle图标效果一致）
-        
+
+
+
         container.appendChild(item);
-        
+
         if (isExpanded) {
             const childrenContainer = document.createElement("div");
             childrenContainer.className = "dest-tree-children";
             childrenContainer.style.paddingLeft = "20px";
             container.appendChild(childrenContainer);
-            
+
             apiCall(`/api/list?path=${encodeURIComponent(dir.path)}`)
                 .then(data => {
                     if (data.success) {
@@ -1894,7 +1859,7 @@ function toggleDestFolder(path, item) {
         destExpandedPaths.delete(path);
         const toggleIcon = item.querySelector(".dest-tree-toggle");
         toggleIcon.classList.remove("expanded");
-        // 移除子目录
+
         let nextSibling = item.nextElementSibling;
         while (nextSibling && nextSibling.classList.contains("dest-tree-children")) {
             nextSibling.remove();
@@ -1904,12 +1869,12 @@ function toggleDestFolder(path, item) {
         destExpandedPaths.add(path);
         const toggleIcon = item.querySelector(".dest-tree-toggle");
         toggleIcon.classList.add("expanded");
-        // 加载子目录
+
         const childrenContainer = document.createElement("div");
         childrenContainer.className = "dest-tree-children";
         childrenContainer.style.paddingLeft = "20px";
         item.insertAdjacentElement("afterend", childrenContainer);
-        
+
         apiCall(`/api/list?path=${encodeURIComponent(path)}`)
             .then(data => {
                 if (data.success) {
@@ -1923,9 +1888,9 @@ function toggleDestFolder(path, item) {
 function updateDestBreadcrumb() {
     const breadcrumb = document.getElementById("dest-breadcrumb");
     const parts = destCurrentPath.split("/").filter(p => p);
-    
+
     let html = '<div class="dest-breadcrumb-item' + (destCurrentPath === "/" ? " active" : "") + '" data-path="/"><i class="fas fa-home"></i></div>';
-    
+
     let currentPath = "";
     parts.forEach((part, index) => {
         currentPath += "/" + part;
@@ -1933,10 +1898,10 @@ function updateDestBreadcrumb() {
         html += '<i class="fas fa-chevron-right dest-breadcrumb-separator"></i>';
         html += '<div class="dest-breadcrumb-item' + (isLast ? " active" : "") + '" data-path="' + currentPath + '">' + escapeHtml(part) + '</div>';
     });
-    
+
     breadcrumb.innerHTML = html;
-    
-    // 绑定点击事件
+
+
     breadcrumb.querySelectorAll(".dest-breadcrumb-item").forEach(item => {
         item.addEventListener("click", function() {
             const path = this.dataset.path;
@@ -1948,13 +1913,13 @@ function updateDestBreadcrumb() {
 function searchDestDirectories() {
     const query = document.getElementById("dest-search-input").value.trim().toLowerCase();
     destSearchQuery = query;
-    
+
     if (!query) {
         loadDestinationPath(destCurrentPath);
         return;
     }
-    
-    // 递归搜索所有目录
+
+
     searchDestRecursive("/", query, []);
 }
 
@@ -1962,18 +1927,18 @@ function searchDestRecursive(path, query, results) {
     apiCall(`/api/list?path=${encodeURIComponent(path)}`)
         .then(data => {
             if (!data.success) return;
-            
+
             const dirs = data.data.files.filter(f => f.isDir);
-            
+
             dirs.forEach(dir => {
                 if (dir.name.toLowerCase().includes(query)) {
                     results.push(dir);
                 }
-                // 继续搜索子目录
+
                 searchDestRecursive(dir.path, query, results);
             });
-            
-            // 如果是根目录调用，显示结果
+
+
             if (path === "/") {
                 renderDestSearchResults(results);
             }
@@ -1984,36 +1949,36 @@ function searchDestRecursive(path, query, results) {
 function renderDestSearchResults(results) {
     const container = document.getElementById("destination-tree");
     container.innerHTML = "";
-    
+
     if (results.length === 0) {
         container.innerHTML = '<div class="dest-empty">未找到匹配的目录</div>';
         return;
     }
-    
+
     results.forEach(dir => {
         const item = document.createElement("div");
         item.className = "dest-tree-item";
         item.dataset.path = dir.path;
-        
-        // 显示完整路径
+
+
         const pathParts = dir.path.split("/").filter(p => p);
         const pathDisplay = pathParts.join(" / ");
-        
+
         item.innerHTML =
             '<i class="fas fa-folder dest-tree-icon"></i>' +
             '<span>' + escapeHtml(pathDisplay) + '</span>';
-        
+
         item.addEventListener("click", function() {
             document.querySelectorAll(".dest-tree-item.selected").forEach(i => i.classList.remove("selected"));
             item.classList.add("selected");
         });
-        
+
         container.appendChild(item);
     });
 }
 
 function moveOrCopyFile() {
-    // 权限验证：只有管理员可以移动/复制文件
+
     if (!currentUser || currentUser.type !== 'admin' && currentUser.type !== 'root') {
         showToast('只有管理员可以移动或复制文件', 'error');
         return;
@@ -2068,10 +2033,8 @@ function moveOrCopyFile() {
     });
 }
 
-// ===== 文件打开逻辑 =====
-// 判断文件是否支持在线预览
 function canPreviewFile(name) {
-    // 无扩展名的文件视为可预览（以文本方式）
+
     if (!name.includes(".")) return true;
     const ext = name.split(".").pop().toLowerCase();
     const previewableExts = [
@@ -2091,17 +2054,15 @@ function canPreviewFile(name) {
     return previewableExts.includes(ext);
 }
 
-// 双击打开文件：统一走预览
 function openFile(path, name) {
     previewFile(path, name);
 }
 
-// ===== 右键菜单 =====
 function showContextMenu(x, y, file) {
     const contextMenu = document.getElementById("context-menu");
     contextMenu.classList.add("active");
 
-    // 确保菜单不超出屏幕
+
     const menuWidth = 200;
     const menuHeight = 300;
     if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 10;
@@ -2123,7 +2084,7 @@ function showContextMenu(x, y, file) {
     const deleteItem = contextMenu.querySelector('[data-action="delete"]');
     const dividers = contextMenu.querySelectorAll('.context-menu-divider');
 
-    // 辅助函数：设置菜单项的权限状态
+
     function setItemAuth(item, hasPermission, deniedMsg) {
         item.style.display = "flex";
         if (hasPermission) {
@@ -2136,7 +2097,7 @@ function showContextMenu(x, y, file) {
     }
 
     if (isMulti) {
-        // 多选模式：隐藏单文件操作，显示批量操作
+
         openItem.style.display = "none";
         previewItem.style.display = "none";
         editItem.style.display = "none";
@@ -2171,7 +2132,7 @@ function showContextMenu(x, y, file) {
         deleteItem.querySelector("span").textContent = "删除";
     }
 
-    // 分隔线始终显示
+
     dividers.forEach(div => {
         div.style.display = '';
     });
@@ -2184,7 +2145,7 @@ function hideContextMenu() {
 function handleContextMenuAction(action) {
     if (selectedFiles.length === 0) return;
 
-    // 检查当前点击的菜单项是否被禁用
+
     var clickedItem = document.querySelector('#context-menu .context-menu-item[data-action="' + action + '"]');
     if (clickedItem && clickedItem.classList.contains('context-menu-disabled')) {
         var deniedMsg = clickedItem.getAttribute('data-auth-denied') || '权限不足';
@@ -2234,25 +2195,24 @@ function handleContextMenuAction(action) {
     hideContextMenu();
 }
 
-// ===== 音频播放 =====
 function playAudio(url, name, path) {
     const audioPlayer = document.getElementById('audio-player');
     const audioElement = document.getElementById('audio-element');
     const audioTitle = document.getElementById('audio-player-title');
     const audioArtist = document.getElementById('audio-player-artist');
 
-    // 显示播放器
+
     audioPlayer.style.display = 'flex';
 
-    // 获取当前文件夹的所有音频文件
+
     const currentDir = path.substring(0, path.lastIndexOf('/')) || '/';
     loadFolderAudioFiles(currentDir, path);
 
-    // 设置音频源和标题
+
     audioElement.src = url;
     audioTitle.textContent = name;
 
-    // 尝试从文件名中提取歌手信息
+
     const artistMatch = name.match(/^(.+?)\s*[-–]\s*.+$/);
     if (artistMatch) {
         audioArtist.textContent = artistMatch[1];
@@ -2260,28 +2220,27 @@ function playAudio(url, name, path) {
         audioArtist.textContent = '未知艺术家';
     }
 
-    // 播放音频
+
     audioElement.play().catch(err => {
         console.error('播放失败:', err);
         showToast('音频播放失败，请检查文件格式', 'error');
     });
 }
 
-// 加载当前文件夹的音频文件到播放列表
 function loadFolderAudioFiles(dirPath, currentPath) {
-    // 清空播放列表
+
     audioPlaylist = [];
 
-    // 使用currentAllFiles获取当前文件夹的所有音频文件
+
     if (currentAllFiles && currentAllFiles.length > 0) {
         currentAllFiles.forEach(file => {
             if (!file.isDir) {
                 const fileExt = file.name.split('.').pop().toLowerCase();
 
-                // 检查是否是音频文件
+
                 if (audioExts.includes(fileExt)) {
-                    // 构建预览URL
-                    const previewUrl = `${API_BASE}/api/preview?path=${encodeURIComponent(file.path)}` + 
+
+                    const previewUrl = `${API_BASE}/api/preview?path=${encodeURIComponent(file.path)}` +
                                      (authToken ? '&token=' + encodeURIComponent(authToken) : '');
 
                     audioPlaylist.push({
@@ -2294,28 +2253,26 @@ function loadFolderAudioFiles(dirPath, currentPath) {
         });
     }
 
-    // 找到当前播放的音频索引
+
     currentAudioIndex = audioPlaylist.findIndex(item => item.path === currentPath);
 }
 
-// 关闭音频播放器
 function closeAudioPlayer() {
     const audioPlayer = document.getElementById('audio-player');
     const audioElement = document.getElementById('audio-element');
 
-    // 停止播放
+
     audioElement.pause();
     audioElement.src = '';
 
-    // 隐藏播放器
+
     audioPlayer.style.display = 'none';
 
-    // 清空播放列表
+
     audioPlaylist = [];
     currentAudioIndex = -1;
 }
 
-// 初始化音频播放器事件
 function initAudioPlayer() {
     const audioElement = document.getElementById('audio-element');
     const closeBtn = document.getElementById('audio-player-close');
@@ -2328,10 +2285,10 @@ function initAudioPlayer() {
     const volumeInput = document.getElementById('audio-volume-input');
     const progressInput = document.getElementById('audio-progress-input');
 
-    // 关闭按钮事件
+
     closeBtn.addEventListener('click', closeAudioPlayer);
 
-    // 播放列表按钮事件
+
     playlistBtn.addEventListener('click', function() {
         const dropdown = document.getElementById('audio-player-dropdown');
         dropdown.classList.toggle('show');
@@ -2340,12 +2297,12 @@ function initAudioPlayer() {
         }
     });
 
-    // 关闭下拉菜单按钮事件
+
     document.getElementById('audio-player-dropdown-close').addEventListener('click', function() {
         document.getElementById('audio-player-dropdown').classList.remove('show');
     });
 
-    // 点击下拉菜单外部关闭
+
     document.addEventListener('click', function(e) {
         const dropdown = document.getElementById('audio-player-dropdown');
         const playlistBtn = document.getElementById('audio-player-playlist');
@@ -2354,12 +2311,12 @@ function initAudioPlayer() {
         }
     });
 
-    // 关闭下拉菜单按钮事件
+
     document.getElementById('audio-player-dropdown-close').addEventListener('click', function() {
         document.getElementById('audio-player-dropdown').classList.remove('show');
     });
 
-    // 点击下拉菜单外部关闭
+
     document.addEventListener('click', function(e) {
         const dropdown = document.getElementById('audio-player-dropdown');
         const playlistBtn = document.getElementById('audio-player-playlist');
@@ -2368,47 +2325,47 @@ function initAudioPlayer() {
         }
     });
 
-    // 播放模式按钮事件
+
     modeBtn.addEventListener('click', togglePlayMode);
 
-    // 播放/暂停按钮事件
+
     playBtn.addEventListener('click', togglePlayPause);
 
-    // 上一首按钮事件
+
     prevBtn.addEventListener('click', playPrevAudio);
 
-    // 下一首按钮事件
+
     nextBtn.addEventListener('click', playNextAudio);
 
-    // 音量按钮事件
+
     volumeBtn.addEventListener('click', toggleMute);
 
-    // 音量滑块事件
+
     volumeInput.addEventListener('input', function() {
         audioElement.volume = this.value / 100;
         updateVolumeIcon(audioElement.volume);
     });
 
-    // 进度条事件
+
     progressInput.addEventListener('input', function() {
         const time = (this.value / 100) * audioElement.duration;
         audioElement.currentTime = time;
     });
 
-    // 音频时间更新事件
+
     audioElement.addEventListener('timeupdate', updateProgress);
 
-    // 音频加载完成事件
+
     audioElement.addEventListener('loadedmetadata', function() {
         document.getElementById('audio-total-time').textContent = formatTime(audioElement.duration);
     });
 
-    // 音频播放结束事件
+
     audioElement.addEventListener('ended', function() {
         playNextAudio();
     });
 
-    // 音频播放状态变化事件
+
     audioElement.addEventListener('play', function() {
         playBtn.querySelector('i').className = 'fas fa-pause';
     });
@@ -2418,7 +2375,6 @@ function initAudioPlayer() {
     });
 }
 
-// 格式化时间
 function formatTime(seconds) {
     if (isNaN(seconds)) return '0:00';
     const mins = Math.floor(seconds / 60);
@@ -2426,7 +2382,6 @@ function formatTime(seconds) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-// 更新进度条
 function updateProgress() {
     const audioElement = document.getElementById('audio-element');
     const progressInput = document.getElementById('audio-progress-input');
@@ -2441,7 +2396,6 @@ function updateProgress() {
     }
 }
 
-// 切换播放/暂停
 function togglePlayPause() {
     const audioElement = document.getElementById('audio-element');
     if (audioElement.paused) {
@@ -2451,7 +2405,6 @@ function togglePlayPause() {
     }
 }
 
-// 播放上一首
 function playPrevAudio() {
     if (audioPlaylist.length === 0) return;
 
@@ -2459,18 +2412,18 @@ function playPrevAudio() {
 
     switch(audioPlayMode) {
         case 'random':
-            // 随机选择一个不等于当前索引的索引
+
             do {
                 prevIndex = Math.floor(Math.random() * audioPlaylist.length);
             } while (prevIndex === currentAudioIndex && audioPlaylist.length > 1);
             break;
         case 'loop':
-            // 循环播放当前歌曲
+
             prevIndex = currentAudioIndex;
             break;
         case 'sequential':
         default:
-            // 顺序播放上一首
+
             prevIndex = (currentAudioIndex - 1 + audioPlaylist.length) % audioPlaylist.length;
             break;
     }
@@ -2479,7 +2432,6 @@ function playPrevAudio() {
     playAudio(prevAudio.url, prevAudio.name, prevAudio.path);
 }
 
-// 更新音量图标
 function updateVolumeIcon(volume) {
     const volumeBtn = document.getElementById('audio-player-volume');
     const icon = volumeBtn.querySelector('i');
@@ -2493,7 +2445,6 @@ function updateVolumeIcon(volume) {
     }
 }
 
-// 切换静音
 function toggleMute() {
     const audioElement = document.getElementById('audio-element');
     const volumeInput = document.getElementById('audio-volume-input');
@@ -2511,7 +2462,6 @@ function toggleMute() {
     updateVolumeIcon(audioElement.volume);
 }
 
-// 切换播放模式
 function togglePlayMode() {
     const modeBtn = document.getElementById('audio-player-mode');
     const modes = ['sequential', 'random', 'loop'];
@@ -2519,11 +2469,11 @@ function togglePlayMode() {
     const nextIndex = (currentIndex + 1) % modes.length;
     audioPlayMode = modes[nextIndex];
 
-    // 更新按钮图标和状态
+
     modeBtn.dataset.mode = audioPlayMode;
     modeBtn.classList.add('active');
 
-    // 更新图标
+
     const icon = modeBtn.querySelector('i');
     switch(audioPlayMode) {
         case 'sequential':
@@ -2541,7 +2491,6 @@ function togglePlayMode() {
     }
 }
 
-// 播放下一首
 function playNextAudio() {
     if (audioPlaylist.length === 0) return;
 
@@ -2549,21 +2498,21 @@ function playNextAudio() {
 
     switch(audioPlayMode) {
         case 'random':
-            // 随机选择一个不等于当前索引的索引
+
             do {
                 nextIndex = Math.floor(Math.random() * audioPlaylist.length);
             } while (nextIndex === currentAudioIndex && audioPlaylist.length > 1);
             break;
         case 'loop':
-            // 循环播放当前歌曲
+
             nextIndex = currentAudioIndex;
             break;
         case 'sequential':
         default:
-            // 顺序播放下一首
+
             nextIndex = (currentAudioIndex + 1) % audioPlaylist.length;
             if (nextIndex === 0 && currentAudioIndex !== -1) {
-                // 已经播放到最后一首，停止播放
+
                 return;
             }
             break;
@@ -2573,7 +2522,6 @@ function playNextAudio() {
     playAudio(nextAudio.url, nextAudio.name, nextAudio.path);
 }
 
-// 显示播放列表
 function showPlaylist() {
     if (audioPlaylist.length === 0) {
         showToast('播放列表为空', 'info');
@@ -2586,14 +2534,14 @@ function showPlaylist() {
     audioPlaylist.forEach((item, index) => {
         const isCurrent = index === currentAudioIndex;
         playlistHtml += `
-            <div class="playlist-item ${isCurrent ? 'active' : ''}" 
-                 style="padding: 8px 12px; margin-bottom: 8px; cursor: pointer; 
-                        border-radius: 4px; background: ${isCurrent ? 'var(--primary-light)' : 'var(--bg-card)'}; 
+            <div class="playlist-item ${isCurrent ? 'active' : ''}"
+                 style="padding: 8px 12px; margin-bottom: 8px; cursor: pointer;
+                        border-radius: 4px; background: ${isCurrent ? 'var(--primary-light)' : 'var(--bg-card)'};
                         display: flex; align-items: center; gap: 8px;"
                  onclick="playAudioFromPlaylist(${index})">
-                <i class="fas ${isCurrent ? 'fa-play' : 'fa-music'}" 
+                <i class="fas ${isCurrent ? 'fa-play' : 'fa-music'}"
                    style="color: ${isCurrent ? 'var(--primary)' : 'var(--text-secondary)'}; width: 16px;"></i>
-                <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; 
+                <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
                              color: ${isCurrent ? 'var(--primary)' : 'var(--text-primary)'};">${escapeHtml(item.name)}</span>
             </div>
         `;
@@ -2601,10 +2549,10 @@ function showPlaylist() {
 
     playlistHtml += '</div>';
 
-    // 使用现有的模态框显示播放列表
+
     const modal = document.getElementById('preview-modal');
 
-    // 如果模态框已经打开，则关闭它
+
     if (modal.style.display === 'flex') {
         closeModal('preview-modal');
         return;
@@ -2618,7 +2566,6 @@ function showPlaylist() {
     openModal('preview-modal');
 }
 
-// 更新播放列表下拉菜单
 function updatePlaylistDropdown() {
     const dropdownBody = document.getElementById('audio-player-dropdown-body');
 
@@ -2643,7 +2590,6 @@ function updatePlaylistDropdown() {
     dropdownBody.innerHTML = html;
 }
 
-// 从播放列表播放
 function playAudioFromPlaylist(index) {
     const item = audioPlaylist[index];
     if (item) {
@@ -2653,7 +2599,6 @@ function playAudioFromPlaylist(index) {
     }
 }
 
-// ===== 文件预览 =====
 function previewFile(path, name) {
     const ext = name.split(".").pop().toLowerCase();
     const previewUrl = `${API_BASE}/api/preview?path=${encodeURIComponent(path)}` + (authToken ? '&token=' + encodeURIComponent(authToken) : '');
@@ -2685,7 +2630,7 @@ function previewFile(path, name) {
     body.innerHTML = "";
     dlBtn.onclick = function() { window.location.href = downloadUrl; };
 
-    // 确保恢复预览模式UI
+
     var titleIcon = modal.querySelector(".preview-title i");
     var editorBody = document.getElementById("editor-body");
     var saveBtn = document.getElementById("editor-save-btn");
@@ -2701,7 +2646,7 @@ function previewFile(path, name) {
     if (lineCol) lineCol.style.display = "none";
     if (fileSizeEl) fileSizeEl.style.display = "none";
 
-    // 非图片预览时重置容器尺寸和位置（图片预览会自适应调整，切换时保持当前尺寸避免闪烁）
+
     var pContainer = modal.querySelector(".preview-container");
     var isImage = imageExts.includes(ext);
     if (pContainer && !isImage) {
@@ -2714,7 +2659,7 @@ function previewFile(path, name) {
         pContainer.style.height = "";
     }
 
-    // 更新底部状态栏
+
     const fileInfo = document.getElementById("preview-file-info");
     if (fileInfo) {
         const typeLabels = {
@@ -2733,13 +2678,13 @@ function previewFile(path, name) {
     }
 
     if (imageExts.includes(ext)) {
-        // 更新当前图片索引
+
         currentImageIndex = currentImageList.findIndex(f => f.path === path);
 
         const img = document.createElement("img");
         img.alt = name;
-        // 通过URL附加token参数解决img标签无法携带Authorization header的问题
-        img.src = authToken ? previewUrl + '&token=' + encodeURIComponent(authToken) : previewUrl;
+
+        img.src = previewUrl;
         img.onerror = function() {
             const errDiv = document.createElement("div");
             errDiv.className = "preview-office";
@@ -2753,14 +2698,14 @@ function previewFile(path, name) {
         };
         body.appendChild(img);
 
-        // 图片加载后填充窗口
+
         img.onload = function() {
             var container = modal.querySelector(".preview-container");
             if (!container) return;
-            // 预览框默认已填充窗口，无需额外调整尺寸
+
         };
 
-        // 添加鼠标滚轮切换图片功能
+
         modal.onwheel = function(e) {
             e.preventDefault();
             if (e.deltaY > 0) {
@@ -2772,16 +2717,16 @@ function previewFile(path, name) {
     } else if (videoExts.includes(ext)) {
         if (videoPreviewExts.includes(ext)) {
             const video = document.createElement("video");
-            // 通过URL附加token参数解决video标签无法携带Authorization header的问题
-            video.src = authToken ? previewUrl + '&token=' + encodeURIComponent(authToken) : previewUrl;
+
+            video.src = previewUrl;
             video.controls = true;
             video.preload = "metadata";
             video.playsInline = true;
             video.style.width = "100%";
             video.style.maxHeight = "100%";
             video.style.objectFit = "contain";
-        
-            // 视频加载失败时显示错误提示
+
+
             video.addEventListener('error', function() {
                 const errDiv = document.createElement("div");
                 errDiv.className = "preview-office";
@@ -2794,12 +2739,12 @@ function previewFile(path, name) {
                 body.innerHTML = "";
                 body.appendChild(errDiv);
             });
-        
-        
-        
+
+
+
             body.appendChild(video);
         } else {
-            // 不支持浏览器预览的视频格式，直接显示下载提示
+
             const unsupportedDiv = document.createElement("div");
             unsupportedDiv.className = "preview-office";
             unsupportedDiv.innerHTML =
@@ -2811,17 +2756,17 @@ function previewFile(path, name) {
             body.appendChild(unsupportedDiv);
         }
     } else if (audioExts.includes(ext)) {
-        // 使用独立的音频播放器
+
         playAudio(previewUrl, name, path);
         return;
     } else if (pdfExts.includes(ext)) {
         const iframe = document.createElement("iframe");
-        // 通过URL附加token参数解决iframe无法携带Authorization header的问题
-        iframe.src = authToken ? previewUrl + '&token=' + encodeURIComponent(authToken) : previewUrl;
+
+        iframe.src = previewUrl;
         body.appendChild(iframe);
     } else if (officeExts.includes(ext)) {
-        // 使用微软 Office Online Viewer 在线预览 Office 文件
-        // Office在线预览需要公网可访问的URL，附加token参数以通过认证
+
+
         const fullPreviewUrl = window.location.origin + previewUrl + (authToken ? '&token=' + encodeURIComponent(authToken) : '');
         const iframe = document.createElement("iframe");
         iframe.src = "https://view.officeapps.live.com/op/embed.aspx?src=" + encodeURIComponent(fullPreviewUrl);
@@ -2830,7 +2775,7 @@ function previewFile(path, name) {
         iframe.style.border = "none";
         iframe.style.borderRadius = "var(--radius-sm)";
         iframe.style.flex = "1";
-        // iframe 加载失败时显示提示
+
         iframe.addEventListener("error", function() {
             body.innerHTML = '<div class="preview-office">' +
                 '<i class="fas fa-file-alt" style="font-size:48px;color:var(--text-muted);margin-bottom:16px"></i>' +
@@ -2862,7 +2807,7 @@ function previewFile(path, name) {
                     '</div>';
             });
     } else if (textExts.includes(ext) || !hasExt) {
-        // 已知文本扩展名或无扩展名文件，以文本方式预览
+
         authFetch(previewUrl.replace(API_BASE, ''))
             .then(r => {
                 if (!r.ok) {
@@ -2873,17 +2818,17 @@ function previewFile(path, name) {
             .then(text => {
                 const pre = document.createElement("pre");
                 pre.className = "code-preview";
-                
-                // 尝试使用highlight.js进行语法高亮
+
+
                 if (typeof hljs !== "undefined") {
-                    // 根据文件扩展名猜测语言
+
                     const language = hljs.getLanguage(ext) ? ext : 'plaintext';
                     const highlighted = hljs.highlight(text, { language: language }).value;
                     pre.innerHTML = highlighted;
                 } else {
                     pre.textContent = text;
                 }
-                
+
                 body.appendChild(pre);
             })
             .catch(err => {
@@ -2907,7 +2852,7 @@ function previewFile(path, name) {
 }
 
 function closePreview() {
-    // 如果在编辑模式下，使用closeEditor检查未保存状态
+
     var editorBody = document.getElementById("editor-body");
     if (editorBody && editorBody.style.display !== "none") {
         closeEditor();
@@ -2915,13 +2860,13 @@ function closePreview() {
     }
     const modal = document.getElementById("preview-modal");
     const body = document.getElementById("preview-body");
-    // 停止视频/音频播放
+
     const media = body.querySelector("video, audio");
     if (media) media.pause();
     body.innerHTML = "";
-    // 移除滚轮事件监听器
+
     modal.onwheel = null;
-    // 重置容器位置和大小
+
     const container = modal ? modal.querySelector(".preview-container") : null;
     if (container) {
         container.classList.remove("preview-fullscreen");
@@ -2933,7 +2878,7 @@ function closePreview() {
         container.style.width = "";
         container.style.height = "";
     }
-    // 重置全屏按钮状态
+
     var fsBtn = document.getElementById("preview-fullscreen-btn");
     if (fsBtn) {
         var icon = fsBtn.querySelector("i");
@@ -2944,7 +2889,6 @@ function closePreview() {
     closeModal("preview-modal");
 }
 
-// 切换到上一张图片
 function navigatePrevImage() {
     if (currentImageList.length === 0) return;
     currentImageIndex = (currentImageIndex - 1 + currentImageList.length) % currentImageList.length;
@@ -2952,7 +2896,6 @@ function navigatePrevImage() {
     previewFile(file.path, file.name);
 }
 
-// 切换到下一张图片
 function navigateNextImage() {
     if (currentImageList.length === 0) return;
     currentImageIndex = (currentImageIndex + 1) % currentImageList.length;
@@ -2960,7 +2903,6 @@ function navigateNextImage() {
     previewFile(file.path, file.name);
 }
 
-// ===== 简易 Markdown 渲染 =====
 function simpleMarkdown(text) {
     let html = escapeHtml(text);
     html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
@@ -2974,8 +2916,6 @@ function simpleMarkdown(text) {
     return html;
 }
 
-// ===== 文件编辑器 =====
-// 更新编辑器代码高亮
 function updateEditorHighlight() {
     var textarea = document.getElementById("editor-textarea");
     var highlight = document.getElementById("editor-highlight");
@@ -2990,7 +2930,7 @@ function updateEditorHighlight() {
 }
 
 function editFile(path, name) {
-    // 权限验证：只有管理员可以编辑文件
+
     if (!currentUser || currentUser.type !== 'admin' && currentUser.type !== 'root') {
         showToast('只有管理员可以编辑文件', 'error');
         return;
@@ -3007,7 +2947,7 @@ function editFile(path, name) {
     const fileInfo = document.getElementById("preview-file-info");
     const downloadBtn = document.getElementById("preview-download-btn");
 
-    // 切换到编辑模式
+
     title.textContent = name;
     if (titleIcon) titleIcon.className = "fas fa-edit";
     previewBody.style.display = "none";
@@ -3045,7 +2985,7 @@ function editFile(path, name) {
 }
 
 function saveFile() {
-    // 权限验证：只有管理员可以保存文件
+
     if (!currentUser || currentUser.type !== 'admin' && currentUser.type !== 'root') {
         showToast('只有管理员可以保存文件', 'error');
         return;
@@ -3080,7 +3020,7 @@ function closeEditor(force) {
         showUnsavedConfirm();
         return;
     }
-    // 恢复预览模式UI
+
     var titleIcon = document.querySelector(".preview-title i");
     var previewBody = document.getElementById("preview-body");
     var editorBody = document.getElementById("editor-body");
@@ -3106,7 +3046,7 @@ function showUnsavedConfirm() {
 
 function closeEditorSave() {
     saveFile();
-    // 保存后直接关闭（saveFile是异步的，等待保存完成）
+
     const textarea = document.getElementById("editor-textarea");
     const checkSave = setInterval(function() {
         if (textarea.dataset.modified !== "true") {
@@ -3114,7 +3054,7 @@ function closeEditorSave() {
             closeEditor(true);
         }
     }, 100);
-    // 超时5秒自动关闭
+
     setTimeout(function() { clearInterval(checkSave); }, 5000);
 }
 
@@ -3143,7 +3083,6 @@ function updateEditorStatus() {
     if (fileSize) fileSize.innerHTML = '<i class="fas fa-file"></i> ' + formatFileSize(new Blob([textarea.value]).size);
 }
 
-// ===== 模态框 =====
 function openModal(id) {
     const modal = document.getElementById(id);
     if (modal) {
@@ -3156,7 +3095,7 @@ function closeModal(id) {
     const modal = document.getElementById(id);
     if (modal) {
         modal.classList.remove("active");
-        // 重置容器内联样式，避免下次打开时保留拖拽/缩放位置
+
         const container = modal.querySelector(".preview-container, .editor-container");
         if (container) {
             container.style.position = "";
@@ -3166,7 +3105,7 @@ function closeModal(id) {
             container.style.width = "";
             container.style.height = "";
         }
-        // 检查是否还有其他模态框打开
+
         const anyActive = document.querySelector(".modal-overlay.active");
         if (!anyActive) {
             document.body.style.overflow = "";
@@ -3174,7 +3113,6 @@ function closeModal(id) {
     }
 }
 
-// ===== 窗口大小拖拽调整 =====
 function initResizeHandles() {
     document.querySelectorAll("[data-resize]").forEach(function(handle) {
         var container = handle.closest(".preview-container, .editor-container");
@@ -3197,7 +3135,7 @@ function initResizeHandles() {
             startLeft = rect.left;
             startTop = rect.top;
 
-            // 切换为绝对定位以支持缩放
+
             container.style.position = "absolute";
             container.style.left = rect.left + "px";
             container.style.top = rect.top + "px";
@@ -3221,27 +3159,27 @@ function initResizeHandles() {
             var maxWidth = window.innerWidth * 0.94;
             var maxHeight = window.innerHeight * 0.94;
 
-            // 左侧调整
+
             if (direction === "l" || direction === "lt" || direction === "lb") {
                 var newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth - diffX));
                 container.style.width = newWidth + "px";
                 container.style.left = (startLeft + startWidth - newWidth) + "px";
             }
 
-            // 右侧调整
+
             if (direction === "r" || direction === "rt" || direction === "rb") {
                 var newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + diffX));
                 container.style.width = newWidth + "px";
             }
 
-            // 顶部调整
+
             if (direction === "t" || direction === "lt" || direction === "rt") {
                 var newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight - diffY));
                 container.style.height = newHeight + "px";
                 container.style.top = (startTop + startHeight - newHeight) + "px";
             }
 
-            // 底部调整
+
             if (direction === "b" || direction === "lb" || direction === "rb") {
                 var newHeight = Math.max(minHeight, Math.min(maxHeight, startHeight + diffY));
                 container.style.height = newHeight + "px";
@@ -3257,7 +3195,7 @@ function initResizeHandles() {
         });
     });
 
-    // 按住顶部拖动窗口
+
     document.querySelectorAll(".preview-header, .editor-header").forEach(function(header) {
         var container = header.closest(".preview-container, .editor-container");
         if (!container) return;
@@ -3266,7 +3204,7 @@ function initResizeHandles() {
         var startX, startY, startLeft, startTop;
 
         header.addEventListener("mousedown", function(e) {
-            // 排除按钮点击
+
             if (e.target.closest("button")) return;
 
             e.preventDefault();
@@ -3277,7 +3215,7 @@ function initResizeHandles() {
             startLeft = rect.left;
             startTop = rect.top;
 
-            // 切换为绝对定位以支持拖动
+
             container.style.position = "absolute";
             container.style.left = rect.left + "px";
             container.style.top = rect.top + "px";
@@ -3296,7 +3234,7 @@ function initResizeHandles() {
             var newLeft = startLeft + diffX;
             var newTop = startTop + diffY;
 
-            // 限制在窗口内
+
             newLeft = Math.max(0, Math.min(window.innerWidth - container.offsetWidth, newLeft));
             newTop = Math.max(0, Math.min(window.innerHeight - container.offsetHeight, newTop));
 
@@ -3313,7 +3251,6 @@ function initResizeHandles() {
     });
 }
 
-// ===== 提示消息 =====
 function showToast(message, type) {
     const toast = document.getElementById("toast");
     const icons = { success: "fa-check-circle", error: "fa-exclamation-circle", info: "fa-info-circle" };
@@ -3327,19 +3264,18 @@ function showToast(message, type) {
     }, 3000);
 }
 
-// ===== 事件监听 =====
 function setupEventListeners() {
-    // 导航按钮
+
     document.getElementById("back-btn").addEventListener("click", goBack);
     document.getElementById("forward-btn").addEventListener("click", goForward);
     document.getElementById("up-btn").addEventListener("click", goUp);
 
-    // 下载按钮
+
     document.getElementById("download-btn").addEventListener("click", function() {
         downloadSelectedFiles();
     });
 
-    // 下载按钮hover生成二维码
+
     (function() {
         var qrPopup = document.getElementById('qr-popup');
         var qrPopupBody = document.getElementById('qr-popup-body');
@@ -3351,7 +3287,7 @@ function setupEventListeners() {
             if (selectedFiles.length === 0) return '';
             var baseUrl = window.location.origin;
 
-            // 根据选择的地址类型替换URL中的主机地址
+
             var selectedAddressType = localStorage.getItem('selectedAddressType') || 'ipv4';
             if (serverInfoCache) {
                 if (selectedAddressType === 'ipv4' && serverInfoCache.ipv4) {
@@ -3364,15 +3300,15 @@ function setupEventListeners() {
 
             var url;
             if (selectedFiles.length === 1) {
-                // 单文件/目录：使用下载页面
+
                 url = baseUrl + '/api/d?path=' + encodeURIComponent(selectedFiles[0].path);
             } else {
-                // 多文件：使用下载页面（逗号分隔paths）
+
                 var pathsParam = selectedFiles.map(function(f){ return f.path; }).join(',');
                 url = baseUrl + '/api/d?paths=' + encodeURIComponent(pathsParam);
             }
 
-            // 附带token参数
+
             if (authToken) {
                 url += '&token=' + encodeURIComponent(authToken);
             }
@@ -3383,7 +3319,7 @@ function setupEventListeners() {
             var url = getDownloadUrl();
             if (!url) return;
 
-            // 生成二维码
+
             if (url !== currentQrUrl) {
                 qrPopupBody.innerHTML = '';
                 qrInstance = new QRCode(qrPopupBody, {
@@ -3397,14 +3333,14 @@ function setupEventListeners() {
                 currentQrUrl = url;
             }
 
-            // 定位弹出框
+
             var rect = btn.getBoundingClientRect();
             var popupWidth = 210;
             var popupHeight = 280;
             var left = rect.left + rect.width / 2 - popupWidth / 2;
             var top = rect.bottom + 10;
 
-            // 边界检测
+
             if (left < 10) left = 10;
             if (left + popupWidth > window.innerWidth - 10) left = window.innerWidth - popupWidth - 10;
             if (top + popupHeight > window.innerHeight - 10) {
@@ -3430,7 +3366,7 @@ function setupEventListeners() {
         var downloadBtn = document.getElementById('download-btn');
         downloadBtn.addEventListener('mouseenter', function() {
             if (this.disabled) return;
-            // 手机端不生成二维码
+
             if (window.innerWidth <= 768) return;
             clearTimeout(qrTimer);
             qrTimer = setTimeout(function() { showQrPopup(downloadBtn); }, 300);
@@ -3439,17 +3375,17 @@ function setupEventListeners() {
             clearTimeout(qrTimer);
             hideQrPopup();
         });
-        // 点击时隐藏二维码
+
         downloadBtn.addEventListener('click', function() {
             hideQrPopup();
         });
     })();
 
-    // 上传文件菜单
+
     var uploadFileMenu = document.getElementById("upload-file-menu");
     if (uploadFileMenu) uploadFileMenu.addEventListener("click", function(e) {
         e.preventDefault();
-        // 清除旧的上传信息
+
         document.getElementById("file-input").value = "";
         document.getElementById("upload-dropzone").classList.remove("has-files");
         document.getElementById("upload-file-list").style.display = "none";
@@ -3460,11 +3396,11 @@ function setupEventListeners() {
         openModal("upload-modal");
     });
 
-    // 上传文件夹菜单
+
     var uploadFolderMenu = document.getElementById("upload-folder-menu");
     if (uploadFolderMenu) uploadFolderMenu.addEventListener("click", function(e) {
         e.preventDefault();
-        // 清除旧的上传信息
+
         document.getElementById("folder-input").value = "";
         document.getElementById("folder-dropzone").classList.remove("has-files");
         document.getElementById("folder-file-list").style.display = "none";
@@ -3483,7 +3419,7 @@ function setupEventListeners() {
         displayFolderFileList(this.files);
     });
 
-    // 新建文件夹菜单
+
     var createFolderMenu = document.getElementById("create-folder-menu");
     if (createFolderMenu) createFolderMenu.addEventListener("click", function(e) {
         e.preventDefault();
@@ -3492,7 +3428,7 @@ function setupEventListeners() {
         setTimeout(() => document.getElementById("folder-name-input").focus(), 100);
     });
 
-    // 新建文件菜单
+
     var createFileMenu = document.getElementById("create-file-menu");
     if (createFileMenu) createFileMenu.addEventListener("click", function(e) {
         e.preventDefault();
@@ -3501,27 +3437,27 @@ function setupEventListeners() {
         setTimeout(() => document.getElementById("create-file-name-input").focus(), 100);
     });
 
-    // 上传确认
+
     document.getElementById("upload-confirm-btn").addEventListener("click", uploadFiles);
     document.getElementById("upload-folder-confirm-btn").addEventListener("click", uploadFolder);
 
-    // 新建文件夹确认
+
     document.getElementById("create-folder-confirm-btn").addEventListener("click", createFolder);
 
-    // 新建文件确认
+
     document.getElementById("create-file-confirm-btn").addEventListener("click", createFile);
 
-    // 重命名确认
+
     document.getElementById("rename-confirm-btn").addEventListener("click", renameFile);
 
-    // 移动/复制确认
+
     document.getElementById("move-copy-confirm-btn").addEventListener("click", moveOrCopyFile);
 
-    // 拖拽上传
+
     setupDropzone("upload-dropzone", "file-input");
     setupDropzone("folder-dropzone", "folder-input");
 
-    // 清除选择
+
     document.getElementById("upload-clear-btn").addEventListener("click", function(e) {
         e.stopPropagation();
         document.getElementById("file-input").value = "";
@@ -3538,7 +3474,7 @@ function setupEventListeners() {
         document.getElementById("folder-dropzone-placeholder").style.display = "";
     });
 
-    // 关闭模态框
+
     document.querySelectorAll(".modal-close-btn, .modal-cancel").forEach(btn => {
         btn.addEventListener("click", function() {
             const modal = this.closest(".modal-overlay");
@@ -3546,15 +3482,15 @@ function setupEventListeners() {
         });
     });
 
-    // 点击模态框外部关闭
+
     window.addEventListener("click", function(event) {
-        // 检查点击是否在模态框内部（.modal-dialog, .preview-container, .editor-container）
-        // 如果在内部，则不关闭
+
+
         if (event.target.closest(".modal-dialog, .preview-container, .editor-container")) {
             return;
         }
         if (event.target.classList.contains("modal-overlay")) {
-            // 未保存确认对话框不允许点击外部关闭
+
             if (event.target.id === "unsaved-confirm-modal") {
                 return;
             }
@@ -3566,10 +3502,10 @@ function setupEventListeners() {
         }
     });
 
-    // 预览关闭
+
     document.getElementById("preview-close-btn").addEventListener("click", closePreview);
 
-    // 预览全屏切换
+
     document.getElementById("preview-fullscreen-btn").addEventListener("click", function() {
         var container = document.querySelector(".preview-container");
         if (!container) return;
@@ -3577,22 +3513,22 @@ function setupEventListeners() {
         var icon = btn.querySelector("i");
         var label = btn.querySelector("span");
         if (container.classList.contains("preview-fullscreen")) {
-            // 退出全屏
+
             container.classList.remove("preview-fullscreen");
             icon.className = "fas fa-expand";
             label.textContent = "全屏";
         } else {
-            // 进入全屏
+
             container.classList.add("preview-fullscreen");
             icon.className = "fas fa-compress";
             label.textContent = "退出";
         }
     });
 
-    // 编辑器
+
     document.getElementById("editor-save-btn").addEventListener("click", saveFile);
 
-    // 未保存确认对话框
+
     document.getElementById("unsaved-save-btn").addEventListener("click", closeEditorSave);
     document.getElementById("unsaved-discard-btn").addEventListener("click", closeEditorDiscard);
     document.getElementById("unsaved-cancel-btn").addEventListener("click", closeEditorCancel);
@@ -3600,7 +3536,7 @@ function setupEventListeners() {
     const editorTextarea = document.getElementById("editor-textarea");
     const editorHighlight = document.getElementById("editor-highlight");
 
-    // 滚动同步
+
     editorTextarea.addEventListener("scroll", function() {
         if (editorHighlight) {
             editorHighlight.scrollTop = this.scrollTop;
@@ -3637,7 +3573,7 @@ function setupEventListeners() {
         }
     });
 
-    // ESC 键和左右箭头
+
     document.addEventListener("keydown", function(e) {
         const previewModal = document.getElementById("preview-modal");
         const isPreviewActive = previewModal.classList.contains("active");
@@ -3649,7 +3585,7 @@ function setupEventListeners() {
                 clearSelection();
             }
         } else if ((e.ctrlKey || e.metaKey) && e.key === "a") {
-            // Ctrl+A 全选
+
             e.preventDefault();
             const container = document.getElementById("file-container");
             const items = container.querySelectorAll(".file-item");
@@ -3667,14 +3603,14 @@ function setupEventListeners() {
                 updateSelectionInfo();
             }
         } else if (e.key === "Delete" && selectedFiles.length > 0 && !isPreviewActive) {
-            // Delete 键删除
+
             if (selectedFiles.length > 1) {
                 batchDeleteFiles(selectedFiles.map(f => f.path));
             } else if (selectedFile) {
                 deleteFile(selectedFile.path);
             }
         } else if (isPreviewActive) {
-            // 左右箭头切换图片
+
             if (e.key === "ArrowLeft") {
                 e.preventDefault();
                 navigatePrevImage();
@@ -3685,7 +3621,7 @@ function setupEventListeners() {
         }
     });
 
-    // 右键菜单
+
     document.addEventListener("click", function(e) {
         if (!e.target.closest(".context-menu-item") && !e.target.closest(".context-menu")) {
             hideContextMenu();
@@ -3700,7 +3636,7 @@ function setupEventListeners() {
         }
     });
 
-    // 侧边栏
+
     const sidebarCollapseBtn = document.getElementById("sidebar-collapse-btn");
     if (sidebarCollapseBtn) {
         sidebarCollapseBtn.addEventListener("click", function() {
@@ -3724,20 +3660,20 @@ function setupEventListeners() {
         });
     }
 
-    // 侧边栏遮罩点击关闭
+
     document.getElementById("sidebar-overlay").addEventListener("click", function() {
         document.querySelector(".sidebar").classList.remove("mobile-open");
         this.classList.remove("active");
     });
 
-    // 刷新
+
     document.getElementById("refresh-btn").addEventListener("click", function() {
         loadFiles(currentPath);
         loadTree();
         calculateStorage();
     });
 
-    // 搜索功能
+
     const searchInput = document.getElementById("search-input");
     let searchTimeout = null;
 
@@ -3745,14 +3681,14 @@ function setupEventListeners() {
         const query = this.value.trim();
         const clearBtn = document.getElementById("search-clear-btn");
 
-        // 显示/隐藏清除按钮
+
         if (query) {
             clearBtn.classList.add("visible");
         } else {
             clearBtn.classList.remove("visible");
         }
 
-        // 防抖搜索
+
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
             if (query) {
@@ -3763,7 +3699,7 @@ function setupEventListeners() {
         }, 500);
     });
 
-    // 按Enter键立即搜索
+
     searchInput.addEventListener("keydown", function(e) {
         if (e.key === "Enter") {
             clearTimeout(searchTimeout);
@@ -3776,20 +3712,20 @@ function setupEventListeners() {
         }
     });
 
-    // 清除搜索按钮
+
     document.getElementById("search-clear-btn").addEventListener("click", function() {
         clearSearch();
         searchInput.blur();
     });
 
-    // 点击搜索框外部时取消焦点
+
     document.addEventListener("click", function(e) {
         if (!searchInput.closest('.file-toolbar-search').contains(e.target)) {
             searchInput.blur();
         }
     });
 
-    // 排序 - Bootstrap dropdown handles show/hide
+
     document.querySelectorAll(".sort-menu-item").forEach(item => {
         item.addEventListener("click", function(e) {
             e.preventDefault();
@@ -3801,7 +3737,7 @@ function setupEventListeners() {
         });
     });
 
-    // 视图切换
+
     document.getElementById("grid-view-btn").addEventListener("click", function() {
         document.getElementById("file-container").classList.remove("list-view");
         document.getElementById("file-container").classList.add("grid-view");
@@ -3818,9 +3754,9 @@ function setupEventListeners() {
         loadFiles(currentPath);
     });
 
-    // 点击内容区取消选择
+
     document.getElementById("content-area").addEventListener("click", function(e) {
-        // 如果正在拖选或刚刚完成拖选，不取消选择
+
         if (e.target.closest(".drag-selection-box") || isDragging) {
             return;
         }
@@ -3829,7 +3765,7 @@ function setupEventListeners() {
         }
     });
 
-    // Enter 键确认
+
     document.getElementById("folder-name-input").addEventListener("keydown", function(e) {
         if (e.key === "Enter") createFolder();
     });
@@ -3838,7 +3774,6 @@ function setupEventListeners() {
     });
 }
 
-// ===== 自动锁定 =====
 let autoLockTimer = null;
 
 function resetAutoLockTimer() {
@@ -3854,27 +3789,25 @@ function resetAutoLockTimer() {
     }
 }
 
-// 用户交互时重置自动锁定计时器
 ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'].forEach(function(evt) {
     document.addEventListener(evt, resetAutoLockTimer, { passive: true });
 });
 
-// ===== 应用默认设置 =====
 function applyDefaultSettings() {
-    // 应用默认排序
+
     const defaultSort = localStorage.getItem('defaultSort');
     if (defaultSort) {
         sortField = defaultSort;
     }
 
-    // 应用默认视图
+
     const defaultView = localStorage.getItem('defaultView') || 'grid';
     const container = document.getElementById('file-container');
     if (container) {
         container.classList.remove('grid-view', 'list-view');
         container.classList.add(defaultView + '-view');
     }
-    // 更新视图切换按钮
+
     const gridBtn = document.getElementById('grid-view-btn');
     const listBtn = document.getElementById('list-view-btn');
     if (gridBtn && listBtn) {
@@ -3882,13 +3815,11 @@ function applyDefaultSettings() {
         listBtn.classList.toggle('active', defaultView === 'list');
     }
 
-    // 应用播放列表位置
+
     const playlistPosition = localStorage.getItem('playlistPosition') || 'left';
     applyPlaylistPosition(playlistPosition);
 }
 
-
-// 获取服务器信息（IP地址等）
 async function fetchServerInfo() {
     try {
         const response = await fetch('/api/server-info');
@@ -3896,7 +3827,7 @@ async function fetchServerInfo() {
             const data = await response.json();
             serverInfoCache = data.data;
 
-            // 更新设置页面的地址显示
+
             const ipv4Input = document.getElementById('settings-ipv4-address');
             const ipv6Input = document.getElementById('settings-ipv6-address');
             const ipv4Radio = document.getElementById('address-ipv4');
@@ -3909,17 +3840,17 @@ async function fetchServerInfo() {
                 ipv6Input.value = serverInfoCache.ipv6;
             }
 
-            // 初始化单选按钮状态
+
             const selectedType = localStorage.getItem('selectedAddressType') || 'ipv4';
             if (ipv4Radio && ipv6Radio) {
                 ipv4Radio.checked = selectedType === 'ipv4';
                 ipv6Radio.checked = selectedType === 'ipv6';
 
-                // 添加单选按钮点击事件
+
                 ipv4Radio.addEventListener('change', function() {
                     if (this.checked) {
                         localStorage.setItem('selectedAddressType', 'ipv4');
-                        // 更新二维码弹出框的按钮状态
+
                         const addressButtons = document.querySelectorAll('.address-selector-btn');
                         addressButtons.forEach(btn => {
                             btn.classList.toggle('active', btn.dataset.type === 'ipv4');
@@ -3930,7 +3861,7 @@ async function fetchServerInfo() {
                 ipv6Radio.addEventListener('change', function() {
                     if (this.checked) {
                         localStorage.setItem('selectedAddressType', 'ipv6');
-                        // 更新二维码弹出框的按钮状态
+
                         const addressButtons = document.querySelectorAll('.address-selector-btn');
                         addressButtons.forEach(btn => {
                             btn.classList.toggle('active', btn.dataset.type === 'ipv6');
@@ -3944,7 +3875,6 @@ async function fetchServerInfo() {
     }
 }
 
-// ===== 获取局域网可访问的URL（使用服务端IP信息） =====
 function getLanUrl(urlStr) {
     if (!serverInfoCache || !serverInfoCache.preferredIP) return urlStr;
     try {
@@ -3955,14 +3885,13 @@ function getLanUrl(urlStr) {
         return url.toString();
     } catch(e) {
         if (serverInfoCache && serverInfoCache.preferredIP) {
-            urlStr = urlStr.replace("//localhost", "//" + serverInfoCache.preferredIP);
+           urlStr = urlStr.replace("//localhost", "//" + serverInfoCache.preferredIP);
             urlStr = urlStr.replace("//127.0.0.1", "//" + serverInfoCache.preferredIP);
         }
         return urlStr;
     }
 }
 
-// ===== 顶部二维码 =====
 function initTopbarQrCode() {
     const wrapper = document.querySelector('.topbar-qrcode-wrapper');
     const qrBody = document.getElementById('topbar-qrcode-body');
@@ -3972,7 +3901,7 @@ function initTopbarQrCode() {
     let currentUrl = '';
     let selectedAddressType = localStorage.getItem('selectedAddressType') || 'ipv4';
 
-    // 初始化地址选择按钮
+
     const addressButtons = wrapper.querySelectorAll('.address-selector-btn');
     addressButtons.forEach(btn => {
         if (btn.dataset.type === selectedAddressType) {
@@ -3986,7 +3915,7 @@ function initTopbarQrCode() {
             selectedAddressType = this.dataset.type;
             localStorage.setItem('selectedAddressType', selectedAddressType);
 
-            // 同步设置页面的单选按钮状态
+
             const ipv4Radio = document.getElementById('address-ipv4');
             const ipv6Radio = document.getElementById('address-ipv6');
             if (ipv4Radio && ipv6Radio) {
@@ -3999,31 +3928,31 @@ function initTopbarQrCode() {
     });
 
     function getQrUrl() {
-        // 获取当前页面的完整URL
+
         let url = window.location.href;
-        
-        // 移除已存在的token参数（如果有），以避免重复
+
+
         url = url.replace(/[?&]token=[^&]*/, '');
-        
-        // 移除URL末尾的?或&（如果有）
+
+
         url = url.replace(/[?&]$/, '');
 
-        // 根据选择的地址类型生成URL
+
         if (serverInfoCache) {
-            // 使用字符串替换方式替换URL中的主机地址
+
             if (selectedAddressType === 'ipv4' && serverInfoCache.ipv4) {
-                // 替换 //hostname:port 或 //hostname 为 //ipv4:port 或 //ipv4
+
                 url = url.replace(/\/\/([^\/:]+)(:\d+)?/, "//" + serverInfoCache.ipv4 + "$2");
             } else if (selectedAddressType === 'ipv6' && serverInfoCache.ipv6) {
                 const ipv6Addr = serverInfoCache.ipv6.replace(/[\[\]]/g, '');
-                // 替换 //hostname:port 或 //hostname 为 //[ipv6]:port 或 //[ipv6]
+
                 url = url.replace(/\/\/([^\/:]+)(:\d+)?/, "//[" + ipv6Addr + "]$2");
             }
         }
-        
-        // 如果已登录，附带token参数
+
+
         if (authToken) {
-            // 判断URL是否已有参数
+
             const separator = url.includes('?') ? '&' : '?';
             url += separator + 'token=' + encodeURIComponent(authToken);
         }
@@ -4050,19 +3979,18 @@ function initTopbarQrCode() {
     });
 }
 
-// ===== 初始化 =====
 document.addEventListener("DOMContentLoaded", async function() {
-    // 初始化主题
+
     initTheme();
-    // 应用默认设置
+
     applyDefaultSettings();
-    // 初始化用户菜单（优先绑定登录按钮，避免后续错误导致登录不可用）
+
     initUserMenu();
-    // 初始化音频播放器
+
     initAudioPlayer();
-    // 检查登录状态
+
     await checkLoginStatus();
-    // 加载文件
+
     loadFiles(currentPath);
     setupEventListeners();
     setupDragSelection();
@@ -4070,24 +3998,23 @@ document.addEventListener("DOMContentLoaded", async function() {
     setupRootTreeToggle();
     calculateStorage();
     initResizeHandles();
-    // 获取服务器信息（用于二维码生成局域网IP）
+
     await fetchServerInfo();
-    // 初始化顶部二维码
+
     initTopbarQrCode();
-    // 启动自动锁定计时器
+
     resetAutoLockTimer();
 });
 
-// ===== 用户认证 =====
 async function checkLoginStatus() {
-    // 检查URL中是否携带token参数（扫码访问）
+
     const urlParams = new URLSearchParams(window.location.search);
     const urlToken = urlParams.get('token');
     if (urlToken) {
-        // 清除URL中的token参数，避免泄露
+
         const cleanUrl = window.location.origin + window.location.pathname;
         window.history.replaceState({}, '', cleanUrl);
-        // 验证token有效性
+
         try {
             authToken = urlToken;
             const response = await apiCall('/api/verify-token', {
@@ -4114,7 +4041,7 @@ async function checkLoginStatus() {
 
     if (savedToken && savedUser) {
         try {
-            // 验证token有效性
+
             const response = await apiCall('/api/verify-token', {
                 method: 'GET'
             });
@@ -4123,11 +4050,11 @@ async function checkLoginStatus() {
                 authToken = savedToken;
                 currentUser = JSON.parse(savedUser);
                 updateUserInfo();
-                // 已登录，显示主界面，隐藏登录页
+
                 document.querySelector('.app').classList.add('app-ready');
                 hideLoginModal();
             } else {
-                // token无效，清除登录状态并显示登录页面
+
                 currentUser = null;
                 authToken = '';
                 localStorage.removeItem('currentUser');
@@ -4137,7 +4064,7 @@ async function checkLoginStatus() {
             }
         } catch (error) {
             console.error('Token verification error:', error);
-            // 验证失败，显示登录页面
+
             currentUser = null;
             authToken = '';
             localStorage.removeItem('currentUser');
@@ -4146,7 +4073,7 @@ async function checkLoginStatus() {
             showLoginModal();
         }
     } else {
-        // 没有保存的登录信息，更新UI权限状态并显示登录页面
+
         currentUser = null;
         authToken = '';
         updateUserInfo();
@@ -4157,7 +4084,7 @@ async function checkLoginStatus() {
 function showLoginModal() {
     const page = document.getElementById('login-page');
     page.classList.remove('hidden');
-    // 显示登录页时隐藏主界面
+
     document.querySelector('.app').classList.remove('app-ready');
     setTimeout(() => {
         document.getElementById('login-username').focus();
@@ -4167,7 +4094,7 @@ function showLoginModal() {
 function hideLoginModal() {
     const page = document.getElementById('login-page');
     page.classList.add('hidden');
-    // 隐藏登录页的同时显示主界面
+
     document.querySelector('.app').classList.add('app-ready');
     document.getElementById('login-username').value = '';
     document.getElementById('login-password').value = '';
@@ -4193,7 +4120,7 @@ async function handleLogin() {
         });
 
         if (response.success) {
-            // 保存token和用户信息
+
             authToken = response.data.token;
             currentUser = response.data.user;
 
@@ -4214,7 +4141,7 @@ async function handleLogin() {
 
 async function handleLogout() {
     try {
-        // 调用后端登出API
+
         await apiCall('/api/logout', {
             method: 'POST'
         });
@@ -4222,7 +4149,7 @@ async function handleLogout() {
         console.error('Logout error:', error);
     }
 
-    // 清除本地状态
+
     currentUser = null;
     authToken = '';
     localStorage.removeItem('currentUser');
@@ -4252,17 +4179,16 @@ function updateUserInfo() {
         loginHint.classList.remove('hidden');
         userInfoIcon.className = 'fas fa-user';
     }
-    // 根据权限更新按钮可见性
+
     updateAuthUI();
 }
 
-// 根据权限更新UI元素的可见性
 function updateAuthUI() {
     const isLoggedIn = currentUser !== null;
     const isAdmin = currentUser && (currentUser.type === 'root' || currentUser.type === 'admin');
     const isRoot = currentUser && currentUser.type === 'root';
 
-    // 更新带data-auth属性的元素
+
     document.querySelectorAll('[data-auth]').forEach(el => {
         const authLevel = el.getAttribute('data-auth');
         let hasPermission = false;
@@ -4273,13 +4199,13 @@ function updateAuthUI() {
         if (hasPermission) {
             el.classList.remove('auth-disabled', 'auth-hidden');
             el.removeAttribute('data-auth-denied');
-            // 恢复隐藏的菜单项
+
             const li = el.closest('li');
             if (li) li.classList.remove('auth-hidden');
         } else {
-            // 下拉菜单项：隐藏整个 li
+
             const isMenuItem = el.classList.contains('dropdown-item') || el.classList.contains('user-menu-item');
-            // 设置区块：隐藏整个 section
+
             const isSettingsSection = el.classList.contains('settings-section');
             if (isMenuItem) {
                 const li = el.closest('li');
@@ -4294,7 +4220,6 @@ function updateAuthUI() {
     });
 }
 
-// 权限不足提示
 document.addEventListener('click', function(e) {
     var target = e.target.closest('[data-auth-denied]');
     if (target) {
@@ -4309,11 +4234,10 @@ document.addEventListener('click', function(e) {
     }
 }, true);
 
-// ===== 主题切换 =====
 function initTheme() {
     applyTheme(currentTheme);
     updateThemeButtons();
-    // 初始化topbar主题按钮图标
+
     const topbarThemeBtn = document.getElementById('topbar-theme-btn');
     if (topbarThemeBtn) {
         topbarThemeBtn.querySelector('i').className = currentTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
@@ -4342,7 +4266,7 @@ function updateThemeButtons() {
 function handleThemeChange(theme) {
     applyTheme(theme);
     updateThemeButtons();
-    // 同步topbar主题按钮图标
+
     const topbarThemeBtn = document.getElementById('topbar-theme-btn');
     if (topbarThemeBtn) {
         topbarThemeBtn.querySelector('i').className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
@@ -4350,12 +4274,11 @@ function handleThemeChange(theme) {
     showToast(`已切换到${theme === 'dark' ? '深色' : '浅色'}模式`, 'info');
 }
 
-// ===== 用户菜单 =====
 function initUserMenu() {
-    // 登录按钮
+
     document.getElementById('login-confirm-btn').addEventListener('click', handleLogin);
 
-    // 用户信息点击事件 - 未登录时跳转到登录页面，已登录时跳转到个人信息页面
+
     document.getElementById('user-info').addEventListener('click', function(e) {
         e.preventDefault();
         if (!currentUser) {
@@ -4365,31 +4288,31 @@ function initUserMenu() {
         }
     });
 
-    // 退出登录
+
     document.getElementById('logout-menu').addEventListener('click', function(e) {
         e.preventDefault();
         handleLogout();
     });
 
-    // 设置菜单
+
     document.getElementById('settings-menu').addEventListener('click', function(e) {
         e.preventDefault();
         showSettingsModal();
     });
 
-    // 关于菜单
+
     document.getElementById('about-menu').addEventListener('click', function(e) {
         e.preventDefault();
         showAboutModal();
     });
 
-    // 安全管理菜单
+
     document.getElementById('security-menu').addEventListener('click', function(e) {
         e.preventDefault();
         showSecurityModal();
     });
 
-    // 主题切换按钮
+
     document.querySelectorAll('.theme-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const theme = this.getAttribute('data-theme');
@@ -4397,55 +4320,55 @@ function initUserMenu() {
         });
     });
 
-    // 顶部导航栏主题切换按钮
+
     document.getElementById('topbar-theme-btn').addEventListener('click', function() {
         const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
         handleThemeChange(newTheme);
-        // 更新按钮图标
+
         this.querySelector('i').className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
     });
 
-    // 设置页面返回按钮
+
     document.getElementById('settings-back-btn').addEventListener('click', hideSettingsModal);
-    
-// 用户信息页面返回按钮
+
+
     document.getElementById('profile-back-btn').addEventListener('click', hideProfileModal);
 
-    // 显示名称即时保存
+
     document.getElementById('profile-displayname').addEventListener('input', onProfileDisplayNameChange);
 
-    // 修改密码按钮
+
     document.getElementById('profile-change-password-btn').addEventListener('click', changeProfilePassword);
 
-    // 关于页面返回按钮
+
     document.getElementById('about-back-btn').addEventListener('click', hideAboutModal);
 
-    // 安全管理页面返回按钮
+
     document.getElementById('security-back-btn').addEventListener('click', hideSecurityModal);
 
-    // 安全管理 - 保存配置
+
     document.getElementById('security-save-config').addEventListener('click', saveSecurityConfig);
 
-    // 安全管理 - 添加用户
+
     document.getElementById('security-add-user-btn').addEventListener('click', function() {
         openUserEditModal(null, '', 'user');
     });
 
-    // 用户编辑弹窗 - 关闭/取消
+
     document.getElementById('user-edit-modal-close').addEventListener('click', closeUserEditModal);
     document.getElementById('user-edit-cancel-btn').addEventListener('click', closeUserEditModal);
 
-    // 用户编辑弹窗 - 保存
+
     document.getElementById('user-edit-save-btn').addEventListener('click', saveUser);
 
-    // 设置页面 - 视图切换
+
     document.querySelectorAll('.settings-toggle-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             document.querySelectorAll('.settings-toggle-btn').forEach(b => b.classList.remove('active'));
             this.classList.add('active');
             var view = this.getAttribute('data-view');
             localStorage.setItem('defaultView', view);
-            // 立即应用视图
+
             var container = document.getElementById('file-container');
             container.classList.remove('grid-view', 'list-view');
             container.classList.add(view + '-view');
@@ -4456,17 +4379,17 @@ function initUserMenu() {
         });
     });
 
-    // 设置页面 - 自定义下拉菜单初始化
+
     initSettingsDropdowns();
 
-    // 设置页面 - 显示隐藏文件
+
     document.getElementById('settings-show-hidden').addEventListener('change', function() {
         localStorage.setItem('showHidden', this.checked);
-        // 立即刷新文件列表
+
         renderFiles(sortFiles(currentAllFiles));
     });
 
-    // 设置页面 - 清除缓存
+
     document.getElementById('settings-clear-cache').addEventListener('click', function() {
         localStorage.removeItem('defaultSort');
         localStorage.removeItem('showHidden');
@@ -4476,12 +4399,12 @@ function initUserMenu() {
         loadSettings();
         applyDefaultSettings();
         resetAutoLockTimer();
-        // 重新加载文件列表
+
         renderFiles(sortFiles(currentAllFiles));
         showToast('缓存已清除', 'success');
     });
 
-    // 登录表单回车提交
+
     document.getElementById('login-username').addEventListener('keydown', function(e) {
         if (e.key === 'Enter') handleLogin();
     });
@@ -4490,7 +4413,6 @@ function initUserMenu() {
     });
 }
 
-// ===== 用户信息页面 =====
 function showProfileModal() {
     const page = document.getElementById('profile-page');
     page.classList.add('show');
@@ -4510,7 +4432,7 @@ function loadProfileInfo() {
     const account = document.getElementById('profile-account');
     const displaynameInput = document.getElementById('profile-displayname');
 
-    // 头像样式
+
     avatar.className = 'profile-avatar ' + currentUser.type;
     if (currentUser.type === 'root') {
         avatar.innerHTML = '<i class="fas fa-crown"></i>';
@@ -4520,27 +4442,26 @@ function loadProfileInfo() {
         avatar.innerHTML = '<i class="fas fa-user-circle"></i>';
     }
 
-    // 显示名称
+
     displayname.textContent = currentUser.displayName || currentUser.username;
 
-    // 类型标签
+
     const typeLabels = { root: 'Root', admin: '管理员', user: '普通用户' };
     typeBadge.className = 'profile-type-badge ' + currentUser.type;
     typeBadge.textContent = typeLabels[currentUser.type] || currentUser.type;
 
-    // 账号
+
     account.textContent = '@' + currentUser.username;
 
-    // 显示名称输入框
+
     displaynameInput.value = currentUser.displayName || '';
 
-    // 清空密码输入
+
     document.getElementById('profile-old-password').value = '';
     document.getElementById('profile-new-password').value = '';
     document.getElementById('profile-confirm-password').value = '';
 }
 
-// 显示名称即时保存（防抖）
 let profileDisplayNameTimer = null;
 function onProfileDisplayNameChange() {
     clearTimeout(profileDisplayNameTimer);
@@ -4569,7 +4490,6 @@ function onProfileDisplayNameChange() {
     }, 600);
 }
 
-// 修改密码
 async function changeProfilePassword() {
     const oldPassword = document.getElementById('profile-old-password').value;
     const newPassword = document.getElementById('profile-new-password').value;
@@ -4618,9 +4538,9 @@ async function changeProfilePassword() {
 function showSettingsModal() {
     const page = document.getElementById('settings-page');
     page.classList.add('show');
-    // 更新权限可见性
+
     updateAuthUI();
-    // 恢复设置值
+
     loadSettings();
 }
 
@@ -4639,9 +4559,8 @@ function hideAboutModal() {
     page.classList.remove('show');
 }
 
-// ===== 安全管理 =====
 let securityConfig = null;
-let editingUsername = null; // null 表示新增，有值表示编辑
+let editingUsername = null;
 
 function showSecurityModal() {
     const page = document.getElementById('security-page');
@@ -4706,7 +4625,7 @@ function renderUserList(users) {
         container.appendChild(item);
     });
 
-    // 绑定编辑按钮事件
+
     container.querySelectorAll('[data-username]').forEach(btn => {
         btn.addEventListener('click', function() {
             openUserEditModal(
@@ -4717,7 +4636,7 @@ function renderUserList(users) {
         });
     });
 
-    // 绑定删除按钮事件
+
     container.querySelectorAll('[data-delete-username]').forEach(btn => {
         btn.addEventListener('click', function() {
             deleteUser(this.dataset.deleteUsername);
@@ -4774,7 +4693,7 @@ function openUserEditModal(username, displayName, userType) {
         passwordInput.value = '';
         passwordInput.placeholder = '留空则不修改密码';
         displaynameInput.value = displayName;
-        // root 用户类型不可修改，禁用类型下拉
+
         if (userType === 'root') {
             setUserEditType('root');
             typeWrapper.classList.add('disabled');
@@ -4830,7 +4749,7 @@ async function saveUser() {
     try {
         let response;
         if (editingUsername) {
-            // root 用户不发送 type 字段，避免触发后端 root 类型保护
+
             const updateData = {
                 username: editingUsername,
                 password: password || '',
@@ -4896,7 +4815,6 @@ async function deleteUser(username) {
     }
 }
 
-// 设置页面自定义下拉菜单
 const settingsDropdowns = {};
 
 function initSettingsDropdowns() {
@@ -4939,17 +4857,17 @@ function initSettingsDropdowns() {
             }
         };
 
-        // 点击触发器
+
         trigger.addEventListener('click', function(e) {
             e.stopPropagation();
-            // 关闭其他下拉菜单
+
             document.querySelectorAll('.settings-dropdown-wrapper.open').forEach(w => {
                 if (w !== wrapper) w.classList.remove('open');
             });
             wrapper.classList.toggle('open');
         });
 
-        // 点击选项
+
         items.forEach(item => {
             item.addEventListener('click', function(e) {
                 e.stopPropagation();
@@ -4961,7 +4879,7 @@ function initSettingsDropdowns() {
         });
     });
 
-    // 点击外部关闭
+
     document.addEventListener('click', function() {
         document.querySelectorAll('.settings-dropdown-wrapper.open').forEach(w => {
             w.classList.remove('open');
@@ -4969,7 +4887,6 @@ function initSettingsDropdowns() {
     });
 }
 
-// 加载设置
 function loadSettings() {
     const defaultSort = localStorage.getItem('defaultSort') || 'name';
     const showHidden = localStorage.getItem('showHidden') === 'true';
@@ -4984,16 +4901,15 @@ function loadSettings() {
     if (settingsDropdowns['settings-auto-lock']) settingsDropdowns['settings-auto-lock'].value = autoLock;
     if (settingsDropdowns['settings-playlist-position']) settingsDropdowns['settings-playlist-position'].value = playlistPosition;
 
-    // 更新视图切换按钮
+
     document.querySelectorAll('.settings-toggle-btn').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-view') === defaultView);
     });
 
-    // 应用播放列表位置
+
     applyPlaylistPosition(playlistPosition);
 }
 
-// 保存设置
 function saveSettings() {
     localStorage.setItem('defaultSort', settingsDropdowns['settings-default-sort'] ? settingsDropdowns['settings-default-sort'].value : 'name');
     localStorage.setItem('showHidden', document.getElementById('settings-show-hidden').checked);
@@ -5003,7 +4919,6 @@ function saveSettings() {
     showToast('设置已保存', 'success');
 }
 
-// 应用播放列表位置
 function applyPlaylistPosition(position) {
     const dropdown = document.getElementById('audio-player-dropdown');
     if (dropdown) {
@@ -5011,11 +4926,9 @@ function applyPlaylistPosition(position) {
     }
 }
 
-// ===== 回到顶部按钮功能 =====
 const backToTopBtn = document.getElementById('back-to-top');
 const contentArea = document.getElementById('content-area');
 
-// 监听滚动事件，显示/隐藏回到顶部按钮
 if (contentArea && backToTopBtn) {
     contentArea.addEventListener('scroll', function() {
         if (contentArea.scrollTop > 300) {
@@ -5025,7 +4938,7 @@ if (contentArea && backToTopBtn) {
         }
     });
 
-    // 点击回到顶部
+
     backToTopBtn.addEventListener('click', function() {
         contentArea.scrollTo({
             top: 0,

@@ -179,22 +179,10 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 		} else {
-			// 文件打包
-			f, err := service.FM.OpenFile(path)
-			if err != nil {
+			// 文件打包：注意使用立即关闭而非 defer，防止循环内文件句柄泄漏
+			if err := addFileToZip(zipWriter, path, info.Name()); err != nil {
 				continue
 			}
-			defer f.Close()
-
-			zw, err := zipWriter.Create(info.Name())
-			if err != nil {
-				continue
-			}
-
-			// 使用缓冲区提高复制性能
-			buf := getBuffer()
-			defer putBuffer(buf)
-			io.CopyBuffer(zw, f, buf)
 		}
 	}
 
@@ -239,6 +227,27 @@ func handleDownloadPage(w http.ResponseWriter, r *http.Request) {
 	// 重定向到前端下载页面，通过 URL 参数传递文件名和下载链接
 	redirectURL := "/download.html?name=" + url.QueryEscape(fileName) + "&url=" + url.QueryEscape(downloadURL)
 	http.Redirect(w, r, redirectURL, http.StatusFound)
+}
+
+// addFileToZip 将单个文件添加到 zip 写入器中，使用立即关闭而非 defer
+// 适用于循环内调用，避免文件句柄泄漏
+func addFileToZip(zipWriter *zip.Writer, path, nameInZip string) error {
+	f, err := service.FM.OpenFile(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	zw, err := zipWriter.Create(nameInZip)
+	if err != nil {
+		return err
+	}
+
+	// 使用缓冲区提高复制性能
+	buf := getBuffer()
+	defer putBuffer(buf)
+	_, err = io.CopyBuffer(zw, f, buf)
+	return err
 }
 
 // addDirToZip 将目录递归添加到 zip 写入器中

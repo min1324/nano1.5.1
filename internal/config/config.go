@@ -68,7 +68,7 @@ func init() {
 		}
 	}
 	if IP.IPv4 == "" {
-		IP.IPv4 = "0,0,0,0"
+		IP.IPv4 = "0.0.0.0"
 	}
 	if len(ipv6s) > 0 {
 		IP.IPv6 = ipv6s[0]
@@ -186,6 +186,7 @@ func Save() error {
 
 // parseSize 将人类可读的大小字符串解析为字节数。
 // 支持的单位：B、KB、MB、GB、TB（不区分大小写）。
+// 支持小数格式（如 1.5GB），使用整数运算避免 float64 精度损失。
 // 空字符串默认返回 1GB，无法识别的单位默认返回 10GB。
 func parseSize(s string) int64 {
 	s = strings.TrimSpace(s)
@@ -193,15 +194,19 @@ func parseSize(s string) int64 {
 		return 1 << 30
 	}
 	s = strings.ToUpper(s)
-	var num float64
-	var unit string
+
+	// 分离数字部分和单位部分
+	unitStart := len(s)
 	for i, c := range s {
 		if (c < '0' || c > '9') && c != '.' {
-			num, _ = strconv.ParseFloat(s[:i], 64)
-			unit = s[i:]
+			unitStart = i
 			break
 		}
 	}
+
+	numStr := s[:unitStart]
+	unit := s[unitStart:]
+
 	if unit == "" {
 		n, err := strconv.ParseInt(s, 10, 64)
 		if err != nil {
@@ -209,12 +214,42 @@ func parseSize(s string) int64 {
 		}
 		return n
 	}
+
 	mul := map[string]int64{"B": 1, "KB": 1024, "MB": 1024 * 1024, "GB": 1024 * 1024 * 1024, "TB": 1024 * 1024 * 1024 * 1024}
 	m, ok := mul[unit]
 	if !ok {
 		return 10 << 30
 	}
-	return int64(num * float64(m))
+
+	// 使用整数运算解析小数，避免 float64 精度损失
+	if strings.Contains(numStr, ".") {
+		parts := strings.SplitN(numStr, ".", 2)
+		intPart, _ := strconv.ParseInt(parts[0], 10, 64)
+		if intPart < 0 {
+			return 0
+		}
+		result := intPart * m
+
+		// 解析小数部分：最多取前 3 位有效数字
+		fracStr := parts[1]
+		if len(fracStr) > 3 {
+			fracStr = fracStr[:3]
+		}
+		// 补零到 3 位，作为千分数
+		for len(fracStr) < 3 {
+			fracStr += "0"
+		}
+		frac, _ := strconv.ParseInt(fracStr, 10, 64)
+		result += frac * m / 1000
+
+		return result
+	}
+
+	n, err := strconv.ParseInt(numStr, 10, 64)
+	if err != nil {
+		return 10 << 30
+	}
+	return n * m
 }
 
 // InitUsers 初始化运行时用户数据，将配置中的用户加载到内存。

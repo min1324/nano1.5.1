@@ -94,6 +94,17 @@ func normalizePaths(paths []string, single string) []string {
 	return nil
 }
 
+// lockTwoPaths 获取两个路径的排序锁，防止死锁
+// 返回两个解锁函数，按字典序排序后加锁，确保锁获取顺序一致
+func lockTwoPaths(a, b string) (unlockA, unlockB func()) {
+	if a > b {
+		a, b = b, a
+	}
+	unlockFirst := service.FM.LockFile(a)
+	unlockSecond := service.FM.LockFile(b)
+	return unlockFirst, unlockSecond
+}
+
 // handleCreateFolder 创建新文件夹
 //
 // 请求参数：
@@ -226,12 +237,7 @@ func handleMove(w http.ResponseWriter, r *http.Request) {
 	clientIP := getClientIP(r)
 	result := batchOp(paths, func(srcPath string) bool {
 		dstPath := filepath.Join(req.DestinationPath, filepath.Base(srcPath))
-		first, second := srcPath, dstPath
-		if first > second {
-			first, second = second, first
-		}
-		unlockFirst := service.FM.LockFile(first)
-		unlockSecond := service.FM.LockFile(second)
+		unlockFirst, unlockSecond := lockTwoPaths(srcPath, dstPath)
 		if err := service.FM.Move(srcPath, dstPath); err != nil {
 			unlockSecond()
 			unlockFirst()
@@ -273,12 +279,7 @@ func handleCopy(w http.ResponseWriter, r *http.Request) {
 	clientIP := getClientIP(r)
 	result := batchOp(paths, func(srcPath string) bool {
 		dstPath := filepath.Join(req.DestinationPath, filepath.Base(srcPath))
-		first, second := srcPath, dstPath
-		if first > second {
-			first, second = second, first
-		}
-		unlockFirst := service.FM.LockFile(first)
-		unlockSecond := service.FM.LockFile(second)
+		unlockFirst, unlockSecond := lockTwoPaths(srcPath, dstPath)
 		if err := service.FM.Copy(srcPath, dstPath); err != nil {
 			unlockSecond()
 			unlockFirst()

@@ -82,19 +82,13 @@ func (fm *FileManager) IsPathSafe(path string) bool {
 
 // LockFile 获取文件操作锁，返回解锁函数
 // 同一路径的并发操作会被串行化，避免数据竞争
-// 解锁后自动清理不再使用的锁对象，防止内存泄漏
+// 使用 sync.Map 按路径粒度存储锁，并发安全且内存安全
 func (fm *FileManager) LockFile(path string) func() {
 	mu, _ := fm.fileOpLocks.LoadOrStore(path, &sync.Mutex{})
 	lock := mu.(*sync.Mutex)
 	lock.Lock()
 	return func() {
 		lock.Unlock()
-		// 尝试清理：如果没有人再等待这把锁，则从map中删除
-		// TryLock成功说明没有其他goroutine在等待，可以安全删除
-		if lock.TryLock() {
-			fm.fileOpLocks.Delete(path)
-			lock.Unlock()
-		}
 	}
 }
 
