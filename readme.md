@@ -106,6 +106,89 @@ users:
 - 生产环境建议使用强密码
 - 定期备份 `config.yaml` 和 `files/` 目录
 
+## 🚀 一键安装部署
+
+项目内置一键安装脚本，支持 **Windows** 和 **Linux** 平台，自动完成编译→安装→注册服务→开机自启→启动的全流程。
+
+### 🪟 Windows 一键安装
+
+**安装**：双击 `install.bat`（自动请求管理员权限）
+
+```
+install.bat  → 检查Go环境 → 编译nano.exe → 安装到 %ProgramFiles%\NanoCloud\
+             → 创建启动包装器 → 注册Windows服务 → 启动服务 → 防火墙放行
+```
+
+安装后效果：
+```
+%ProgramFiles%\NanoCloud\
+  ├── nano.exe          # 后端程序
+  ├── run-nano.bat      # 服务启动包装器（确保工作目录正确）
+  ├── static/           # 前端页面 (index.html, app.js, style.css, download.html)
+  ├── config.yaml       # 配置文件
+  ├── files/            # 用户文件存储
+  └── logs/             # 日志文件
+```
+
+> **前端托管说明**：后端通过 `http.Dir("./static")` 托管前端页面。`run-nano.bat` 包装器确保运行时工作目录为安装目录，保证 `./static` 正确解析。
+
+**管理脚本**（双击运行）：
+
+| 脚本 | 功能 |
+|------|------|
+| `start.bat` | 后台启动 NanoCloud |
+| `stop.bat` | 停止 NanoCloud |
+| `status.bat` | 查看运行状态（进程/服务/端口） |
+| `uninstall.bat` | 完全卸载（停止服务 → 删除服务 → 清理文件） |
+
+> **高级安装**：`install.ps1`（右键→用 PowerShell 运行）支持 NSSM 服务注册选项。
+
+**开机自启机制**：通过 `sc create` 注册为 Windows 服务，类型为 `auto`（自动启动），并配置失败自动重启（5秒/10秒/30秒间隔）。
+
+### 🐧 Linux 一键安装
+
+**安装**（需要 root 权限）：
+
+```bash
+sudo bash install.sh
+```
+
+```
+install.sh  → 检查Go环境 → 编译 → 安装到 /usr/local/bin/nanocloud
+            → 创建 /usr/local/share/nanocloud/{static,config.yaml,files,logs}
+            → 注册 systemd 服务（开机自启）→ 启动服务 → 防火墙放行
+```
+
+安装后效果：
+```
+/usr/local/bin/nanocloud              # 二进制程序
+/usr/local/share/nanocloud/
+  ├── static/           # 前端页面 (index.html, app.js, style.css, download.html)
+  ├── config.yaml       # 配置文件
+  ├── files/            # 用户文件存储
+  └── logs/             # 日志文件
+```
+
+**管理命令**：
+
+| 命令 | 功能 |
+|------|------|
+| `sudo systemctl start nanocloud` | 启动 |
+| `sudo systemctl stop nanocloud` | 停止 |
+| `sudo systemctl status nanocloud` | 查看状态 |
+| `sudo systemctl restart nanocloud` | 重启 |
+
+**管理脚本**：
+
+| 脚本 | 功能 |
+|------|------|
+| `bash start.sh` | 启动 |
+| `bash stop.sh` | 停止 |
+| `bash status.sh` | 查看状态 |
+| `sudo bash uninstall.sh` | 完全卸载 |
+
+> **前端托管说明**：systemd 服务配置了 `WorkingDirectory=/usr/local/share/nanocloud`，确保运行时 `./static` 正确指向前端资源目录。
+
 ## 📁 项目结构
 
 ```
@@ -150,7 +233,17 @@ nano/
 │   └── download.html
 ├── logs/                            # 日志目录（运行时自动创建）
 ├── files/                           # 文件存储目录（运行时自动创建）
-├── install.bat                      # 一键安装脚本
+├── install.bat                      # Windows 一键安装脚本
+├── uninstall.bat                    # Windows 卸载脚本
+├── start.bat                        # Windows 启动脚本
+├── stop.bat                         # Windows 停止脚本
+├── status.bat                       # Windows 状态检查脚本
+├── install.ps1                      # Windows PowerShell 高级安装脚本
+├── install.sh                       # Linux 一键安装脚本
+├── uninstall.sh                     # Linux 卸载脚本
+├── start.sh                         # Linux 启动脚本
+├── stop.sh                          # Linux 停止脚本
+├── status.sh                        # Linux 状态检查脚本
 └── readme.md
 ```
 
@@ -175,6 +268,28 @@ go build -o nano.exe .
 ```
 
 启动后访问 http://localhost:8080
+
+### 服务管理
+
+安装到系统后，通过以下方式管理 NanoCloud 的运行状态：
+
+**Windows（已注册为服务）**：
+
+| 操作 | 双击脚本 | 命令行 |
+|------|----------|--------|
+| 启动 | `start.bat` | `sc start NanoCloud` |
+| 停止 | `stop.bat` | `sc stop NanoCloud` |
+| 状态 | `status.bat` | `sc query NanoCloud` |
+| 卸载 | `uninstall.bat` | `sc delete NanoCloud` |
+
+**Linux（已注册为 systemd 服务）**：
+
+| 操作 | 脚本 | systemd 命令 |
+|------|------|-------------|
+| 启动 | `bash start.sh` | `sudo systemctl start nanocloud` |
+| 停止 | `bash stop.sh` | `sudo systemctl stop nanocloud` |
+| 状态 | `bash status.sh` | `sudo systemctl status nanocloud` |
+| 卸载 | `sudo bash uninstall.sh` | (自动处理) |
 
 ## 📡 API 接口
 
@@ -298,6 +413,82 @@ logMaxAge: 30           # 日志文件保留天数
 | logMaxAge      | 30      | 日志文件保留天数，超期自动清理        |
 
 > 若 `config.yaml` 不存在，将使用默认配置启动并自动生成配置文件。
+
+### 修改配置
+
+有两种方式修改 NanoCloud 的配置：
+
+**方式一：在线修改（推荐，无需重启）**
+
+管理员登录后，通过 API 动态修改配置：
+
+| 接口 | 说明 | 可修改字段 |
+|------|------|-----------|
+| `PUT /api/admin/update-config` | 修改系统配置 | `maxStorage`, `previewMaxSize` |
+
+```json
+// 请求示例
+PUT /api/admin/update-config
+{
+  "maxStorage": "20GB",
+  "previewMaxSize": "20MB"
+}
+```
+
+> 在线修改的配置会自动持久化到 `config.yaml`，重启后依然生效。
+
+**方式二：手动修改（需要重启）**
+
+直接编辑 `config.yaml` 文件，然后重启服务：
+
+**Windows**（安装为服务后）：
+```bash
+# 1. 停止服务
+sc stop NanoCloud
+
+# 2. 编辑配置文件（用记事本打开）
+notepad "%ProgramFiles%\NanoCloud\config.yaml"
+
+# 3. 启动服务
+sc start NanoCloud
+```
+
+**Linux**（安装为 systemd 服务后）：
+```bash
+# 1. 编辑配置文件
+sudo nano /usr/local/share/nanocloud/config.yaml
+
+# 2. 重启服务
+sudo systemctl restart nanocloud
+```
+
+> **注意**：修改 `port`（端口）后，需要更新防火墙规则。
+
+### 用户管理
+
+管理员可通过以下 API 管理用户：
+
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| `POST` | `/api/admin/add-user` | 新增用户 | Root |
+| `PUT` | `/api/admin/update-user` | 修改用户信息（密码/角色/显示名） | Root |
+| `DELETE` | `/api/admin/delete-user` | 删除用户 | Root |
+
+配置文件中用户格式示例：
+
+```yaml
+users:
+  - username: root
+    password: "$2a$10$..."  # bcrypt 哈希，首次启动自动加密明文
+    type: root               # root / admin / user
+    displayName: Root
+  - username: admin
+    password: "$2a$10$..."
+    type: admin
+    displayName: Admin
+```
+
+> **安全说明**：密码支持明文，启动时自动迁移为 bcrypt 哈希。root 用户不可删除。
 
 ## 📝 日志格式
 
@@ -596,6 +787,24 @@ const MaxTokenDuration = 30 * time.Minute
 ```
 
 ## 📝 更新日志
+
+### v1.5.0 (2025-06-15)
+
+#### 新增功能
+
+- **一键安装部署脚本**：支持 Windows（`install.bat`）和 Linux（`install.sh`）一键安装
+- **服务管理脚本**：`start.bat`/`start.sh`、`stop.bat`/`stop.sh`、`status.bat`/`status.sh`、`uninstall.bat`/`uninstall.sh`
+- **Windows 服务注册**：安装时自动注册为 Windows 服务，开机自启，失败自动重启
+- **Linux systemd 服务**：安装时自动注册 systemd 服务，`WorkingDirectory` 确保前端托管正确
+- **PowerShell 高级安装**：`install.ps1` 支持 NSSM 服务注册选项
+
+#### 文档优化
+
+- 新增「一键安装部署」章节，详细说明 Windows 和 Linux 安装流程
+- 新增「服务管理」章节，说明安装后的启动/停止/状态查看/卸载操作
+- 新增「修改配置」章节，说明在线修改和手动修改两种方式
+- 新增「用户管理」章节，说明管理员用户管理 API
+- 更新项目结构树，列出所有部署脚本
 
 ### v1.4.3 (2025-12-20)
 

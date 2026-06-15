@@ -65,12 +65,15 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -90,7 +93,6 @@ func main() {
 		fmt.Printf("初始化日志系统失败: %v\n", err)
 		os.Exit(1)
 	}
-	defer logger.Stop() // 确保在程序退出时停止日志系统
 
 	// 获取监听地址（默认为 0.0.0.0:8080）
 	address := config.GetAddress()
@@ -102,20 +104,22 @@ func main() {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	// 托管前端静态资源（禁用目录列表）
+	// 托管前端静态资源（禁用目录列表，设置缓存头）
 	fileServer := http.FileServer(neuteredFileSystem{http.Dir("./static")})
-	mux.Handle("/", fileServer)
+	mux.Handle("/", cacheControlMiddleware(fileServer))
 
+	// 使用带 gzip 压缩的 HTTP 处理器
+	gzipHandler := gzipMiddleware(mux)
 	logger.Info("system", "启动", address, config.C.UploadDir)
 	fmt.Printf("服务已启动，监听地址:[%s],本机IPV4:%s\n", address, config.IP.IPv4)
 
 	// 使用 http.Server 支持优雅关闭
 	srv := &http.Server{
 		Addr:         address,
-		Handler:      mux,
-		ReadTimeout:  10 * time.Minute,  // 读取请求超时时间，增加以支持大文件上传
-		WriteTimeout: 10 * time.Minute,  // 写入响应超时时间
-		IdleTimeout:  120 * time.Second, // 空闲连接超时时间
+		Handler:      gzipHandler,
+		ReadTimeout:  10 * time.Minute,
+		WriteTimeout: 10 * time.Minute,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// 在 goroutine 中启动服务
@@ -184,4 +188,101 @@ type noDirListingFile struct {
 
 func (f noDirListingFile) Readdir(count int) ([]os.FileInfo, error) {
 	return nil, nil
+}
+
+// ===== gzip 压缩中间件 =====
+
+// gzipResponseWriter 包装 http.ResponseWriter，启用 gzip 压缩
+type gzipResponseWriter struct {
+	io.Writer
+	http.ResponseWriter
+	statusCode int
+}
+
+func (w *gzipResponseWriter) Write(b []byte) (int, error) {
+	return w.Writer.Write(b)
+}
+
+func (w *gzipResponseWriter) WriteHeader(code int) {
+	w.statusCode = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
+// gzipMiddleware 对支持 gzip 的客户端启用响应压缩
+// 跳过媒体文件（视频/音频/图片）和 API 预览/下载路径，
+// 因为这些请求依赖 Range 头实现流式播放，gzip 会破坏字节范围定位
+func gzipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 仅对 GET 请求和接受 gzip 的客户端启用
+		if r.Method != http.MethodGet {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// 跳过媒体预览/下载路径 — 这些路径可能返回视频/音频流
+		path := r.URL.Path
+		if strings.HasPrefix(path, "/api/preview") || strings.HasPrefix(path, "/api/download") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// 跳过已知的媒体文件扩展名
+		if strings.HasSuffix(path, ".mp4") || strings.HasSuffix(path, ".webm") ||
+			strings.HasSuffix(path, ".ogg") || strings.HasSuffix(path, ".mov") ||
+			strings.HasSuffix(path, ".avi") || strings.HasSuffix(path, ".mkv") ||
+			strings.HasSuffix(path, ".mp3") || strings.HasSuffix(path, ".wav") ||
+			strings.HasSuffix(path, ".flac") || strings.HasSuffix(path, ".aac") ||
+			strings.HasSuffix(path, ".jpg") || strings.HasSuffix(path, ".jpeg") ||
+			strings.HasSuffix(path, ".png") || strings.HasSuffix(path, ".gif") ||
+			strings.HasSuffix(path, ".webp") || strings.HasSuffix(path, ".ico") ||
+			strings.HasSuffix(path, ".svg") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		acceptEncoding := r.Header.Get("Accept-Encoding")
+		if !strings.Contains(acceptEncoding, "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+		if err != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+		defer gz.Close()
+
+		gzw := &gzipResponseWriter{
+			Writer:         gz,
+			ResponseWriter: w,
+		}
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Del("Content-Length")
+
+		next.ServeHTTP(gzw, r)
+	})
+}
+
+// cacheControlMiddleware 为静态资源添加缓存控制头
+// HTML：no-cache（确保即时更新），JS/CSS/图片：1 天缓存
+func cacheControlMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 设置适用于所有静态资源的缓存头
+		w.Header().Set("Vary", "Accept-Encoding")
+
+		// 根据文件类型设置不同的缓存策略
+		if strings.HasSuffix(r.URL.Path, ".html") {
+			w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+		} else if strings.HasSuffix(r.URL.Path, ".js") ||
+			strings.HasSuffix(r.URL.Path, ".css") ||
+			strings.HasSuffix(r.URL.Path, ".png") ||
+			strings.HasSuffix(r.URL.Path, ".jpg") ||
+			strings.HasSuffix(r.URL.Path, ".svg") ||
+			strings.HasSuffix(r.URL.Path, ".ico") {
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }

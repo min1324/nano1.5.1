@@ -13,5 +13,14 @@ test/
 
 test_*.txt
 
-*.sh
-*.bat
+build/
+
+nano_test_build.exe
+
+# 不忽略部署管理脚本（随项目分发给用户）
+!install.*
+!uninstall.*
+!start.*
+!stop.*
+!status.*
+!build-all.*
